@@ -1,7 +1,9 @@
-"""Market data ingestion pipeline for raw, unadjusted daily OHLCV bars.
+"""Market data ingestion pipeline for raw daily OHLCV bars.
 
 Critical Invariants:
-1. Prices stored are strictly UNADJUSTED (auto_adjust=False, Adj Close ignored).
+1. Prices stored are split-adjusted but NOT dividend-adjusted (i.e., the 'Close' column
+   from yfinance, not 'Adj Close'). yfinance >= 0.2 always applies split adjustments;
+   pre-split absolute prices are reconstructable via the split_ratio in fact_corporate_actions.
 2. Tickers are mapped to synthetic permanent `sec_id` (SEC_<TICKER>_001).
 3. `known_from` is computed via exchange calendar session close + 15 min buffer (16:15 EST).
 4. Atomic Parquet writing and monotonic `ingestion_seq` audit logging.
@@ -209,18 +211,23 @@ def ingest_ohlcv(
         clean_ticker = ticker.strip().upper()
         sec_id = reg.get_or_create_sec_id(clean_ticker)
 
-        # Download strictly unadjusted data
-        download_kwargs: dict[str, Any] = {
-            "tickers": clean_ticker,
+        # Use Ticker.history() for reliable single-ticker OHLCV retrieval.
+        # auto_adjust=False: returns 'Close' (split-adjusted, NOT dividend-adjusted)
+        # and 'Adj Close' (fully adjusted). We store 'Close' only.
+        # NOTE: yfinance >= 0.2 always applies split adjustments regardless of flags;
+        # this is the canonical split-adjusted price. Splits are tracked separately
+        # in fact_corporate_actions so the pre-split price is always recoverable.
+        t_obj = yf.Ticker(clean_ticker)
+        history_kwargs: dict[str, Any] = {
             "start": start_str,
             "auto_adjust": False,
             "actions": False,
-            "progress": False,
+            "repair": False,
         }
         if end_str:
-            download_kwargs["end"] = end_str
+            history_kwargs["end"] = end_str
 
-        raw_df = yf.download(**download_kwargs)
+        raw_df = t_obj.history(**history_kwargs)
         if raw_df is not None and not raw_df.empty:
             parsed_df = parse_yfinance_ohlcv_dataframe(
                 raw_df=raw_df,

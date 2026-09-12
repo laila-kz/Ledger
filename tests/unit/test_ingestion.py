@@ -125,10 +125,10 @@ class TestParseDataFrames:
 class TestIngestionPipelinesWithMocks:
     """Tests for end-to-end ingestion pipelines with mocked network responses."""
 
-    @patch("ledger.ingestion.market_data.yf.download")
+    @patch("ledger.ingestion.market_data.yf.Ticker")
     def test_ingest_ohlcv_mocked(
         self,
-        mock_download: MagicMock,
+        mock_ticker_cls: MagicMock,
         temp_raw_dir: Path,
     ) -> None:
         mock_pdf = pd.DataFrame(
@@ -137,11 +137,14 @@ class TestIngestionPipelinesWithMocks:
                 "High": [510.0],
                 "Low": [495.0],
                 "Close": [505.0],
+                "Adj Close": [480.0],
                 "Volume": [20000000],
             },
             index=pd.to_datetime(["2020-08-28"]),
         )
-        mock_download.return_value = mock_pdf
+        mock_ticker = MagicMock()
+        mock_ticker.history.return_value = mock_pdf
+        mock_ticker_cls.return_value = mock_ticker
 
         entry = ingest_ohlcv(
             tickers=["AAPL"],
