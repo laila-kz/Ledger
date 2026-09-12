@@ -89,6 +89,9 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-v --tb=short"
+markers = [
+    "integration: mark test as requiring external network or live feeds",
+]
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]

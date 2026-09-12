@@ -93,5 +93,33 @@
 
 ---
 
+## [2026-09-12] Day 5: Ingestion Pipelines & Week 1 Definition of Done (DoD) Verification
+
+### 1. The Ingestion Trap & Unadjusted Price Invariant
+* **The Silent Adjustment Trap:** Modern `yfinance` returns split/dividend pre-adjusted prices by default. If ingested blindly, historical pre-split prices are retroactively compressed (e.g. AAPL July 2020 prices shown as $125 instead of $500), causing look-ahead leakage.
+* **The Solution:**
+  - Mandatory `auto_adjust=False, actions=False` in `yf.download`.
+  - Discard `Adj Close` column completely and store only raw `Open, High, Low, Close, Volume`.
+  - Corporate actions (`fact_corporate_actions`) ingested separately from `.splits` and `.dividends` series.
+  - `known_from` convention: `ex_date` session close + 15 min buffer (16:15 EST / EDT converted to UTC).
+* **ADR Recorded:** Established [ADR-005: Corporate Action Timing and Known-From Resolution Convention](file:///docs/adr/005-corporate-action-known-from-convention.md).
+
+### 2. Implementation Modules & CLI Tools
+* `ledger/ingestion/market_data.py`: `ingest_ohlcv()` pipeline with `TickerRegistry` (mapping tickers to `SEC_<TICKER>_001`), atomic monthly Parquet writing, and CLI interface (`python -m ledger.ingestion.market_data`).
+* `ledger/ingestion/corporate_actions.py`: `ingest_corporate_actions()` pipeline for splits and cash dividends with yearly Hive partitioning and CLI interface (`python -m ledger.ingestion.corporate_actions`).
+* `scripts/seed_week1.py`: Automated seed and verification script asserting pre-split price invariants (AAPL > $400 on 2020-08-28; TSLA > $1,800 on 2020-08-28).
+
+### 3. Week 1 Definition of Done (DoD) Check
+- [x] Development environment configured with Python 3.10+, Ruff, and MyPy in strict mode.
+- [x] Bitemporal interval math module implemented and tested (`ledger/core/bitemporal.py`).
+- [x] Exchange calendar wrapper operational for NYSE market hours (`ledger/core/calendars.py`).
+- [x] Permanent SecID $\leftrightarrow$ ticker bitemporal resolver implemented (`ledger/core/entity.py`).
+- [x] Parquet partition write/read utilities and DuckDB catalog built (`ledger/storage/`).
+- [x] Raw unadjusted OHLCV and corporate actions ingestion pipelines built (`ledger/ingestion/`).
+- [x] All 45 unit tests passing with 100% type-check clean (`mypy --strict`).
+
+---
+
+
 
 
