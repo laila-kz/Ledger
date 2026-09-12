@@ -1,0 +1,52 @@
+name: CI Quality Gate
+
+on:
+  push:
+    branches: ["main", "Work-in-progress", "feat/**"]
+  pull_request:
+    branches: ["main", "Work-in-progress"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Lint, Type Check & Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install Dependencies
+        run: |
+          uv sync --all-extras --dev
+
+      - name: Run Ruff Lint Check
+        run: |
+          uv run ruff check .
+
+      - name: Run Ruff Format Check
+        run: |
+          uv run ruff format --check .
+
+      - name: Run MyPy (Strict Mode)
+        run: |
+          uv run mypy .
+
+      - name: Run Pytest & Canary Suite
+        run: |
+          uv run pytest --cov=ledger --cov-report=term-missing

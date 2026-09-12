@@ -1,6 +1,7 @@
 """Basic environment and version verification test."""
 
 import sys
+
 import ledger
 
 
