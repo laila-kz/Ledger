@@ -70,4 +70,28 @@
 
 ---
 
+## [2026-09-12] Day 4: Storage Layer, Hive Parquet Partitioning & Ingestion Logging
+
+### 1. The Storage Problem & Physical Invariants
+* **Layout Design:**
+  - `data/raw/market_ohlcv/year=YYYY/month=MM/batch_{ingestion_seq}_{uuid}.parquet` (monthly due to high daily density).
+  - `data/raw/corporate_actions/year=YYYY/batch_{ingestion_seq}_{uuid}.parquet` (yearly due to sparse events).
+  - `data/raw/entity_map/batch_{ingestion_seq}_{uuid}.parquet` (flat layout).
+* **Atomic File Writes:** Parquet files are written to `.tmp_{uuid}_{name}` before atomic `os.replace()` to prevent corrupted partial reads.
+* **Monotonic Global Sequence Counter:** Every batch is assigned a unique `ingestion_seq` tracked in `metadata/ingestion_log.parquet`.
+* **ADR Recorded:** Established [ADR-004: Monotonic Global Ingestion Sequence for Deterministic Window Ordering](file:///docs/adr/004-global-ingestion-seq.md).
+
+### 2. Implementation Modules
+* `ledger/storage/partitions.py`: Partition layout helpers, atomic Parquet writer, SHA-256 hash calculator.
+* `ledger/storage/ingestion_log.py`: Monotonic sequence generator and batch audit log manager (`IngestionLogManager`).
+* `ledger/storage/catalog.py`: `LedgerCatalog` managing DuckDB connection, registering Hive-partitioned views and derived bitemporal views with empty placeholder fallbacks, and zero-copy Polars query execution.
+
+### 3. Unit Test Coverage (`tests/unit/test_storage.py`)
+* Verified atomic writes, SHA-256 hash validation, monthly/yearly Hive directory partitioning.
+* Verified monotonic sequence increments across multiple batches and audit log persistence.
+* Verified DuckDB catalog view registration with both empty schemas and populated partition datasets.
+
+---
+
+
 

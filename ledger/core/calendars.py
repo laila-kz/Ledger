@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import zoneinfo
 from datetime import date, datetime, timedelta
+from typing import cast
 
 import exchange_calendars as xcals
 import pandas as pd
@@ -49,21 +50,36 @@ class NYSECalendarService:
         return bool(self._calendar.is_session(date_str))
 
     def next_session(self, dt: date | datetime | str) -> date:
-        """Get the next active trading session strictly after the provided date."""
+        """Get the next active trading session strictly after the provided date.
+
+        Handles both session dates and non-session dates (weekends, holidays).
+        """
         if isinstance(dt, datetime):
             dt = self._to_ny_datetime(dt).date()
         date_str = dt.isoformat() if isinstance(dt, date) else str(dt)
         ts = pd.Timestamp(date_str)
-        next_ts = self._calendar.next_session(ts)
+
+        if self._calendar.is_session(ts):
+            next_ts = self._calendar.next_session(ts)
+        else:
+            # If input is a weekend/holiday, find the next session following it
+            next_ts = self._calendar.date_to_session(ts, direction="next")
         return next_ts.date()  # type: ignore[no-any-return]
 
     def previous_session(self, dt: date | datetime | str) -> date:
-        """Get the previous active trading session strictly before the provided date."""
+        """Get the previous active trading session strictly before the provided date.
+
+        Handles both session dates and non-session dates.
+        """
         if isinstance(dt, datetime):
             dt = self._to_ny_datetime(dt).date()
         date_str = dt.isoformat() if isinstance(dt, date) else str(dt)
         ts = pd.Timestamp(date_str)
-        prev_ts = self._calendar.previous_session(ts)
+
+        if self._calendar.is_session(ts):
+            prev_ts = self._calendar.previous_session(ts)
+        else:
+            prev_ts = self._calendar.date_to_session(ts, direction="previous")
         return prev_ts.date()  # type: ignore[no-any-return]
 
     def session_open(self, session_date: date | str) -> datetime:
@@ -72,14 +88,16 @@ class NYSECalendarService:
         ts = pd.Timestamp(date_str)
         open_ts = self._calendar.session_open(ts)
         # open_ts is UTC in exchange_calendars, convert to NY
-        return open_ts.to_pydatetime().astimezone(NY_TZ)
+        dt_val = cast(datetime, open_ts.to_pydatetime())
+        return dt_val.astimezone(NY_TZ)
 
     def session_close(self, session_date: date | str) -> datetime:
         """Get the market close timestamp (America/New_York) for a given session."""
         date_str = session_date.isoformat() if isinstance(session_date, date) else str(session_date)
         ts = pd.Timestamp(date_str)
         close_ts = self._calendar.session_close(ts)
-        return close_ts.to_pydatetime().astimezone(NY_TZ)
+        dt_val = cast(datetime, close_ts.to_pydatetime())
+        return dt_val.astimezone(NY_TZ)
 
     def get_trading_sessions(self, start_date: date | str, end_date: date | str) -> list[date]:
         """Return all trading session dates between start_date and end_date (inclusive)."""
