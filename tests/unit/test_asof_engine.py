@@ -477,7 +477,7 @@ class TestMultiFeatureJoinsAndCatalog:
         assert_frame_equal(res_polars, res_duckdb)
 
     def test_intraday_timestamp_granularity_backward_asof(self) -> None:
-        """Assert backward ASOF matches previous row when query timestamp precedes afternoon filing."""
+        """Assert backward ASOF matches previous row when query precedes afternoon filing."""
         filings_df = pl.DataFrame(
             {
                 "sec_id": ["SEC_AAPL_001", "SEC_AAPL_001"],
@@ -505,7 +505,7 @@ class TestMultiFeatureJoinsAndCatalog:
         assert joined["eps"].to_list() == [1.00, 1.50]
 
     def test_ambiguous_keys_raise_error(self) -> None:
-        """Assert ValueError is raised when both known_from and valid_from exist without right_on."""
+        """Assert ValueError is raised when known_from and valid_from exist without right_on."""
         ambiguous_df = pl.DataFrame(
             {
                 "sec_id": ["SEC_AAPL_001"],

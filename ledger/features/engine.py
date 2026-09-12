@@ -193,7 +193,8 @@ def _detect_bound_key(
     if preferred_bound:
         if preferred_bound not in feature_df.columns:
             raise ValueError(
-                f"Specified `bound_column='{preferred_bound}'` not found in feature DataFrame: {feature_df.columns}"
+                f"Specified `bound_column='{preferred_bound}'` not found in "
+                f"feature DataFrame: {feature_df.columns}"
             )
         return preferred_bound
 
