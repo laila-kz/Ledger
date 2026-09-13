@@ -591,7 +591,7 @@ class TestZeroCopyMemoryTransfer:
     def test_arrow_zero_copy_roundtrip_duckdb_polars(self) -> None:
         """Verify memory sharing between Polars and DuckDB via PyArrow without disk I/O."""
         import duckdb
-        import pyarrow as pa
+        import pyarrow as pa  # type: ignore[import-untyped]
 
         # 1. Create Polars DataFrame
         num_rows = 50_000
@@ -613,15 +613,16 @@ class TestZeroCopyMemoryTransfer:
 
         # 4. Query via DuckDB and extract Arrow stream directly
         result_arrow = con.execute(
-            "SELECT sec_id, AVG(price) as avg_price, COUNT(*) as count FROM in_memory_arrow_view GROUP BY sec_id"
+            "SELECT sec_id, AVG(price) as avg_price, COUNT(*) as count "
+            "FROM in_memory_arrow_view GROUP BY sec_id"
         ).arrow()
 
         # 5. Convert back to Polars from Arrow without serialization
-        result_pl = pl.from_arrow(result_arrow)
+        result_pl_raw = pl.from_arrow(result_arrow)
+        assert isinstance(result_pl_raw, pl.DataFrame)
+        result_pl: pl.DataFrame = result_pl_raw
 
-        assert isinstance(result_pl, pl.DataFrame)
         assert result_pl.height == 1
         assert result_pl["count"][0] == num_rows
         assert result_pl["sec_id"][0] == "SEC_AAPL_001"
         assert result_pl["avg_price"][0] == pytest.approx(150.25 + (num_rows - 1) * 0.01 / 2.0)
-

@@ -120,6 +120,67 @@
 
 ---
 
+## [2026-09-13] Week 2 Day 5: Verification & Benchmarking
 
+### 1. Performance Benchmark — Vectorized ASOF Join SLA
+
+Benchmark: `benchmarks/bench_asof_engine.py --sweep` (warm-path, 5 timed runs, 2 warm-up)
+
+| Tickers | Obs/Ticker | Total Obs | Mean ms | P99 ms | SLA |
+| ------: | ---------: | --------: | ------: | -----: | :-- |
+|       5 |        200 |     1,000 |    2.77 |   3.47 | **PASS** |
+|      10 |        200 |     2,000 |    2.93 |   3.06 | **PASS** |
+|      20 |        100 |     2,000 |    3.17 |   3.27 | **PASS** |
+|      50 |         50 |     2,500 |    4.26 |   4.74 | **PASS** |
+|     100 |         30 |     3,000 |    5.33 |   6.10 | **PASS** |
+
+**Headline**: 5–6ms for 3,000 observations across 100 tickers on warm path — **20× under the 100ms SLA budget**.
+
+Extrapolated capacity: 500 rebalances × 500 tickers = 250,000 obs → ~1.4 seconds total. A full backtesting grid fits in 2 seconds.
+
+### 2. Apache Arrow Zero-Copy Verification
+
+Benchmark: `benchmarks/bench_arrow_zero_copy.py --rows 100000 --runs 3`
+
+| Stage | Latency |
+| :---- | ------: |
+| Polars → Arrow (`to_arrow`) | 1.1 ms |
+| DuckDB register (in-memory) | 227 ms (cold DuckDB init) |
+| DuckDB query → Arrow result | 8.9 ms |
+| Arrow → Polars (`from_arrow`) | 0.6 ms |
+| **Throughput** | **2.7M rows/sec** |
+
+**Zero-copy confirmed at buffer-address level:**
+- `Polars → Arrow buf shared : YES (zero-copy)` — `df["price"].to_arrow().buffers()[1].address == arrow_table.column("price").buffers()[1].address`
+- `Input buf intact post-DDB : YES` — DuckDB does not copy or mutate the registered Arrow buffer.
+
+**Note on DuckDB register latency:** The 227ms first-call cost is the DuckDB engine spin-up (schema inference, JIT compilation for the registered view). This amortizes to zero across a session — subsequent queries against the same registered view drop to <10ms. This matches ADR-009 warm-path exclusion.
+
+### 3. Test Suite Expansion
+
+| Module | New Tests | Coverage Added |
+| :----- | --------: | :------------- |
+| `tests/unit/test_arrow_zero_copy.py` | 10 | Buffer identity on `to_arrow()`, `from_arrow()`, DuckDB no-disk guarantee, 100k-row E2E |
+
+**Total unit tests: 130 / 130 passing.**
+
+### 4. Architectural Decisions Recorded
+
+- **[ADR-007](docs/adr/007-ema-seeding-convention.md):** EMA seeding uses Polars `adjust=False` convention (P₀-recursive), not TA-Lib SMA-seed. Divergence from TA-Lib: 0.41% at bar 60, decays exponentially.
+- **[ADR-009](docs/adr/009-benchmark-methodology.md):** Four benchmark rules: (1) warm-path only, (2) realistic multi-ticker shape, (3) buffer-address-level zero-copy test, (4) mean-not-best SLA metric.
+
+### 5. Week 2 Definition of Done (DoD)
+
+- [x] CAF engine: `compute_caf_scalar`, `compute_caf_matrix`, `adjusted_close_as_of` — all 18 math tests passing.
+- [x] Vectorized ASOF join engine: `join_features_as_of`, `compute_features_as_of` — 20 engine tests passing.
+- [x] Declarative feature registry: DAG resolution, cycle detection, deterministic hash — 23 registry tests passing.
+- [x] Technical feature views: `adj_close`, `momentum_20d`, `volatility_20d`, `sma_50d`, `ema_50d` — 9 feature tests, 4 integration tests passing.
+- [x] Benchmark SLA: ASOF join < 100ms for 1,000–3,000 observations across multiple tickers — all scale levels PASS.
+- [x] Zero-copy Arrow memory sharing verified at buffer-address level — no CSV/Parquet intermediaries.
+- [x] `mypy --strict` passes with zero type errors across all 38 source files.
+- [x] `ruff check .` and `ruff format --check .` both clean.
+- [x] 130 unit tests passing, 0 failures, 0 errors.
+
+---
 
 
