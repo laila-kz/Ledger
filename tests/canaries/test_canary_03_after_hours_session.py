@@ -44,9 +44,7 @@ def test_after_hours_filing_is_shifted_to_next_session_open() -> None:
         pl.DataFrame({"metric_value": [None, None, 2.50]}),
     )
 
-    raw_timestamp_filing = filing.with_columns(
-        pl.lit(raw_event_time).alias("known_from")
-    )
+    raw_timestamp_filing = filing.with_columns(pl.lit(raw_event_time).alias("known_from"))
     leaky = join_features_as_of(
         pl.DataFrame(
             {

@@ -185,5 +185,47 @@ Benchmark: `benchmarks/bench_arrow_zero_copy.py --rows 100000 --runs 3`
 
 ---
 
+## [2026-09-13] Week 3: The Leakage Canary Suite (Core Differentiator)
+
+### 1. The Core Architectural Philosophy
+* **The Insight:** Standard unit tests only verify the "happy path" of an engine. A backtesting platform must guarantee that look-ahead bugs are **provably caught and rejected**.
+* **The Canary Pattern:** Every canary pairs a Point-in-Time (PIT) pipeline assertion with a deliberately leaky reference pipeline. A canary test passes **if and only if** the Ledger PIT engine yields the ground truth while the naive/leaky baseline diverges.
+
+### 2. Canaries Implemented (`tests/canaries/`)
+
+| Canary | Name | Defect Mechanism | PIT Protection in Ledger |
+| :--- | :--- | :--- | :--- |
+| **01** | **Restated Fundamentals** | Retroactive insertion of amended EPS filings before they were known. | `known_to` bitemporal window exclusion via `derive_known_to_polars()`. |
+| **02** | **Retroactive Splits** | Static backward price deflation before split execution / announcement. | Dynamic Cumulative Adjustment Factor ($\text{CAF}$) evaluated as of observation timestamp. |
+| **03** | **After-Hours Sessions** | Post-market earnings filings consumed in closed Friday sessions. | Calendar-aware `get_actionable_timestamp()` shifting after-hours filings to next session open ($09:30\text{ EST}$). |
+| **04** | **Survivorship Bias** | Delisted entities (`LEHMQ`) pruned from historical trade universe. | Bitemporal universe membership with $[valid\_from, valid\_to)$ intervals. |
+| **05** | **Filing Lag Window** | Fiscal period end ($T+0$) assumed as filing availability date. | Strict separation of `fiscal_period_end` from SEC EDGAR acceptance timestamp (`known_from`). |
+| **06** | **Ticker Relabeling Drift** | Ticker renames (`FB` $\to$ `META`) fragmenting historical price series. | Permanent synthetic `sec_id` entity resolution with point-in-time ticker aliases. |
+
+### 3. Canary Test Harness & Self-Testing (`tests/canaries/conftest.py`, `test_harness_self_test.py`)
+* Created deterministic synthetic data generators for OHLCV, splits, corporate filings, and entity maps.
+* Built assertion utilities: `assert_no_lookahead()` and `assert_leaky_diverges()`.
+* Added 3 harness self-tests confirming that leaky reference pipelines reliably diverge.
+
+### 4. Documentation & Catalog
+* Created [`docs/canary_catalog.md`](docs/canary_catalog.md) detailing each defect, naive implementation flaw, and mathematical PIT assertion.
+
+### 5. Week 3 Definition of Done (DoD)
+- [x] Synthetic test fixtures and mock scenario generators in `tests/canaries/conftest.py`.
+- [x] Canary 01 (Restatements) implemented and passing.
+- [x] Canary 02 (Retroactive Splits) implemented and passing.
+- [x] Canary 03 (After-Hours Sessions) implemented and passing.
+- [x] Canary 04 (Survivorship Universe) implemented and passing.
+- [x] Canary 05 (Filing Lag Window) implemented and passing.
+- [x] Canary 06 (Ticker Relabeling) implemented and passing.
+- [x] Canary harness self-test suite implemented and passing.
+- [x] `docs/canary_catalog.md` catalog documentation complete.
+- [x] `pytest tests/canaries/` passes 10/10 tests in $< 2$ seconds.
+- [x] Full suite (`pytest`) passes 141/141 tests cleanly with zero regressions.
+- [x] `ruff check .`, `ruff format --check .`, and `mypy .` clean across all 49 source files.
+
+---
+
+
 
 

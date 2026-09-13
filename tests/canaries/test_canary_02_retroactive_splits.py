@@ -47,9 +47,11 @@ def test_retroactive_split_adjustment_respects_observation_time() -> None:
         }
     )
 
-    pit = compute_caf_matrix(prices, splits, observations).filter(
-        pl.col("trade_date") == PRICE_DATE
-    ).sort("observation_timestamp")
+    pit = (
+        compute_caf_matrix(prices, splits, observations)
+        .filter(pl.col("trade_date") == PRICE_DATE)
+        .sort("observation_timestamp")
+    )
     expected = pl.DataFrame(
         {
             "caf": [1.0, 4.0],
@@ -58,9 +60,7 @@ def test_retroactive_split_adjustment_respects_observation_time() -> None:
     )
     assert_no_lookahead(pit.select(["caf", "adj_close"]), expected)
 
-    leaky = leaky_static_adjusted_close(prices, splits).filter(
-        pl.col("trade_date") == PRICE_DATE
-    )
+    leaky = leaky_static_adjusted_close(prices, splits).filter(pl.col("trade_date") == PRICE_DATE)
     assert_leaky_diverges(
         leaky.select("adj_close"),
         pl.DataFrame({"adj_close": [400.0]}),

@@ -88,7 +88,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m 'not integration'"
 markers = [
     "integration: mark test as requiring external network or live feeds",
     "benchmark: mark test as a performance benchmark",
