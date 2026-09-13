@@ -43,6 +43,7 @@ htmlcov/
 data/raw/
 data/processed/
 data/duckdb/
+artifacts/
 *.parquet
 *.duckdb
 *.db
