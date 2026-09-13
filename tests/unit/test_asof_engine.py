@@ -533,6 +533,7 @@ class TestMultiFeatureJoinsAndCatalog:
 class TestVectorizedEnginePerformance:
     """Benchmark asserting vectorized ASOF join runs in < 100ms on 1000+ observations."""
 
+    @pytest.mark.benchmark
     def test_benchmark_1000_observations_sub_100ms(self) -> None:
         num_tickers = 5
         num_obs_per_ticker = 300  # 1,500 total observations

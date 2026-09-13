@@ -166,6 +166,7 @@ Benchmark: `benchmarks/bench_arrow_zero_copy.py --rows 100000 --runs 3`
 
 ### 4. Architectural Decisions Recorded
 
+- **Canonical Temporal Coordinate:** Standardized strictly on `observation_timestamp` across all modules (`engine.py`, `registry.py`, `definitions/technical.py`, benchmarks, tests). Zero occurrences of `observation_ts` in the codebase.
 - **[ADR-007](docs/adr/007-ema-seeding-convention.md):** EMA seeding uses Polars `adjust=False` convention (P₀-recursive), not TA-Lib SMA-seed. Divergence from TA-Lib: 0.41% at bar 60, decays exponentially.
 - **[ADR-009](docs/adr/009-benchmark-methodology.md):** Four benchmark rules: (1) warm-path only, (2) realistic multi-ticker shape, (3) buffer-address-level zero-copy test, (4) mean-not-best SLA metric.
 
@@ -174,13 +175,15 @@ Benchmark: `benchmarks/bench_arrow_zero_copy.py --rows 100000 --runs 3`
 - [x] CAF engine: `compute_caf_scalar`, `compute_caf_matrix`, `adjusted_close_as_of` — all 18 math tests passing.
 - [x] Vectorized ASOF join engine: `join_features_as_of`, `compute_features_as_of` — 20 engine tests passing.
 - [x] Declarative feature registry: DAG resolution, cycle detection, deterministic hash — 23 registry tests passing.
-- [x] Technical feature views: `adj_close`, `momentum_20d`, `volatility_20d`, `sma_50d`, `ema_50d` — 9 feature tests, 4 integration tests passing.
+- [x] Technical feature views: `adj_close`, `momentum_20d`, `volatility_20d`, `sma_50d`, `ema_50d` — 9 feature tests, 5 integration tests passing.
+- [x] Canary 01 Ancestor: `known_to` bitemporal restatement filtering verified in both unit and end-to-end integration tests.
 - [x] Benchmark SLA: ASOF join < 100ms for 1,000–3,000 observations across multiple tickers — all scale levels PASS.
 - [x] Zero-copy Arrow memory sharing verified at buffer-address level — no CSV/Parquet intermediaries.
-- [x] `mypy --strict` passes with zero type errors across all 38 source files.
+- [x] `mypy --strict` passes with zero type errors across all 41 source files.
 - [x] `ruff check .` and `ruff format --check .` both clean.
-- [x] 130 unit tests passing, 0 failures, 0 errors.
+- [x] 131 unit tests passing, 0 failures, 0 errors.
 
 ---
+
 
 

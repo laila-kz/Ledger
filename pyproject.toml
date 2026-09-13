@@ -91,6 +91,7 @@ pythonpath = ["."]
 addopts = "-v --tb=short"
 markers = [
     "integration: mark test as requiring external network or live feeds",
+    "benchmark: mark test as a performance benchmark",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

@@ -242,3 +242,50 @@ class TestCatalogFeatureComputation:
 
         assert "momentum_20d" in joined.columns
         assert joined["momentum_20d"][0] is not None
+
+
+# =============================================================================
+# 5. Restatement & Known-To Interval Filtering (Canary 01 Ancestor)
+# =============================================================================
+
+
+class TestKnownToRestatementEnforcement:
+    """End-to-end verification of bitemporal restatement cutoff via known_to."""
+
+    def test_known_to_filter_excludes_superseded_row(self) -> None:
+        """Row A: known_from=2020-07-15 16:00, known_to=2020-11-10 16:00, value=1.00
+
+        Row B: known_from=2020-11-10 16:00, known_to=None,             value=0.70
+        Observation at 2020-11-10 09:00 (before Row B's filing): returns Row A (1.00).
+        Observation at 2020-11-10 17:00 (after Row B's filing): returns Row B (0.70).
+        """
+        from ledger.features.engine import join_features_as_of
+
+        feature_df = pl.DataFrame(
+            {
+                "sec_id": ["SEC_ABC", "SEC_ABC"],
+                "eps_metric": [1.00, 0.70],
+                "known_from": [
+                    datetime(2020, 7, 15, 16, 0, tzinfo=UTC),
+                    datetime(2020, 11, 10, 16, 0, tzinfo=UTC),
+                ],
+                "known_to": [
+                    datetime(2020, 11, 10, 16, 0, tzinfo=UTC),
+                    None,
+                ],
+            }
+        )
+
+        entity_df = pl.DataFrame(
+            {
+                "sec_id": ["SEC_ABC", "SEC_ABC"],
+                "observation_timestamp": [
+                    datetime(2020, 11, 10, 9, 0, tzinfo=UTC),  # Before Row B -> Row A (1.00)
+                    datetime(2020, 11, 10, 17, 0, tzinfo=UTC),  # After Row B -> Row B (0.70)
+                ],
+            }
+        )
+
+        joined = join_features_as_of(entity_df, [feature_df])
+
+        assert joined["eps_metric"].to_list() == [1.00, 0.70]

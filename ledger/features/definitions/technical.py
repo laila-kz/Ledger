@@ -159,6 +159,12 @@ def compute_ema_50d(ctx: FeatureContext) -> pl.DataFrame:
         ema_t = alpha * adj_close_t + (1 - alpha) * ema_{t-1}
 
     Warm-up period: First 49 observations evaluate to null.
+
+    Seeding Convention:
+        Uses Polars `ewm_mean(span=50, min_samples=50, adjust=False)`. Recursion
+        initiates from P_0 and nulls the first 49 bars. Differs from TA-Lib/Bloomberg
+        SMA_50-initialization by < 0.4% in initial bars, decaying asymptotically to
+        zero over longer histories (documented in ADR 007).
     """
     df = _get_adjusted_prices(ctx)
 
