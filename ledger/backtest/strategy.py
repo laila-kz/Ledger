@@ -118,7 +118,7 @@ def generate_target_weights(
     if strategy_config.rebalance_frequency == "weekly":
         result = result.sort(["sec_id", "observation_timestamp"]).with_columns(
             pl.col("weight").replace(0.0, None).forward_fill().over("sec_id").fill_null(0.0)
-        )
+        ).filter(pl.col("_weekday") == strategy_config.weekly_rebalance_day + 1)
 
     return result.select(["observation_timestamp", "sec_id", "weight"])
 

@@ -1,6 +1,6 @@
 """Tests for the Week 4 reference strategy."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import polars as pl
 import pytest
@@ -42,3 +42,25 @@ def test_missing_features_are_rejected() -> None:
                 }
             )
         )
+
+
+def test_weekly_strategy_returns_only_rebalance_timestamps() -> None:
+    timestamps = [datetime(2024, 1, 1, 21, 0) + timedelta(days=i) for i in range(14)]
+    features = pl.DataFrame(
+        {
+            "sec_id": ["A"] * len(timestamps),
+            "observation_timestamp": timestamps,
+            "close": [110.0] * len(timestamps),
+            "momentum_20d": [0.30] * len(timestamps),
+            "volatility_20d": [0.10] * len(timestamps),
+            "sma_50d": [100.0] * len(timestamps),
+        }
+    )
+
+    result = generate_target_weights(
+        features,
+        StrategyConfig(top_n=1, rebalance_frequency="weekly", weekly_rebalance_day=0),
+    )
+
+    assert result.height == 2
+    assert result["observation_timestamp"].dt.weekday().to_list() == [1, 1]
