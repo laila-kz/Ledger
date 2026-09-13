@@ -4,6 +4,30 @@
 
 ---
 
+## [2026-09-13] Week 4 Day 5: Pre-Merge Verification
+
+### Initial-Capital Contract Bug
+* **Failure mode:** The CLI exposed `--initial-capital`, but the simulator and
+  tear-sheet initially normalized equity to `1.0`, allowing the manifest to
+  advertise a capital value the equity curve ignored.
+* **Resolution:** Threaded `initial_capital` through `SimulationConfig`, equity
+  generation, metric cumulative-return/CAGR calculations, tear-sheet creation,
+  and CLI manifest parameters.
+* **Guard:** The subprocess CLI integration test now exercises the real argument
+  path and verifies the generated artifacts and manifest together.
+
+### Merge Gate Results
+* [x] `artifacts/` is gitignored.
+* [ ] `uv.lock` is present and tracked. The repository has no lockfile and the
+  `uv` executable is unavailable in the current environment; the manifest
+  honestly records null lockfile metadata until dependency locking is restored.
+* [x] Offline CLI integration test passes with synthetic Parquet inputs.
+* [x] Manifest reproducible content is stable across timestamp changes.
+* [ ] Real-data leakage delta verified. This checkout has no `data/` directory,
+  so no real-data tear-sheet was claimed.
+
+---
+
 ## [2026-09-12] Day 1: Project Scaffolding, Strict Quality Gates & Append-Only Storage Core
 
 ### 1. The Architectural Thesis: Why Ledger Exists

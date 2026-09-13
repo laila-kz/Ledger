@@ -27,10 +27,11 @@ def build_tear_sheet(
     leaky_simulation: pl.DataFrame,
     corrected_simulation: pl.DataFrame,
     periods_per_year: int = TRADING_DAYS_PER_YEAR,
+    initial_capital: float = 1.0,
 ) -> TearSheet:
     """Compute both metric sets and corrected-minus-leaky attribution."""
-    leaky = compute_metrics(leaky_simulation, periods_per_year)
-    corrected = compute_metrics(corrected_simulation, periods_per_year)
+    leaky = compute_metrics(leaky_simulation, periods_per_year, initial_capital)
+    corrected = compute_metrics(corrected_simulation, periods_per_year, initial_capital)
     delta = Metrics(
         **{
             field: _difference(getattr(corrected, field), getattr(leaky, field))

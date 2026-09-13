@@ -124,12 +124,15 @@ def mean_turnover(turnover: Sequence[float]) -> float | None:
 def compute_metrics(
     simulation: pl.DataFrame,
     periods_per_year: int = TRADING_DAYS_PER_YEAR,
+    initial_capital: float = 1.0,
 ) -> Metrics:
     """Compute all tear-sheet metrics from a simulation DataFrame."""
     required = {"observation_timestamp", "net_return", "equity", "turnover"}
     missing = sorted(required - set(simulation.columns))
     if missing:
         raise ValueError(f"Simulation missing required metric columns: {missing}")
+    if initial_capital <= 0.0:
+        raise ValueError("initial_capital must be greater than zero.")
     if simulation.is_empty():
         return Metrics(*(None for _ in range(9)))
 
@@ -138,10 +141,14 @@ def compute_metrics(
     equity = [float(value) for value in ordered["equity"].to_list()]
     turnover = [float(value) for value in ordered["turnover"].to_list()]
     timestamps = ordered["observation_timestamp"].to_list()
-    growth = cumulative_return(equity)
-    # Simulation equity is normalized to initial capital 1.0 and records the
-    # first interval's ending value, so the initial equity point is implicit.
-    annualized_cagr = cagr([1.0, equity[-1]], timestamps[0], timestamps[-1])
+    growth = (
+        None
+        if not equity or not _all_finite(equity)
+        else equity[-1] / initial_capital - 1.0
+    )
+    annualized_cagr = cagr(
+        [initial_capital, equity[-1]], timestamps[0], timestamps[-1]
+    )
     drawdown = max_drawdown(equity)
     return Metrics(
         cumulative_return=growth,

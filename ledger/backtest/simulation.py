@@ -13,12 +13,15 @@ class SimulationConfig:
 
     transaction_cost_bps: float = 5.0
     price_column: str = "price"
+    initial_capital: float = 1.0
 
     def __post_init__(self) -> None:
         if self.transaction_cost_bps < 0.0:
             raise ValueError("transaction_cost_bps must be non-negative.")
         if not self.price_column:
             raise ValueError("price_column must not be empty.")
+        if self.initial_capital <= 0.0:
+            raise ValueError("initial_capital must be greater than zero.")
 
 
 def simulate_portfolio(
@@ -137,7 +140,11 @@ def simulate_portfolio(
             (pl.col("gross_return") - pl.col("cost")).alias("net_return")
         )
         .sort("observation_timestamp")
-        .with_columns((1.0 + pl.col("net_return")).cum_prod().alias("equity"))
+        .with_columns(
+            (
+                (1.0 + pl.col("net_return")).cum_prod() * simulation_config.initial_capital
+            ).alias("equity")
+        )
     )
 
 
