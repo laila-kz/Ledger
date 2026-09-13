@@ -256,6 +256,15 @@ def leaky_same_day_filing(
     ).drop("_observation_date")
 
 
+def leaky_latest_fundamental(
+    filings: pl.DataFrame,
+    observations: pl.DataFrame,
+) -> pl.DataFrame:
+    """Deliberately expose the latest filing version at every observation time."""
+    latest = filings.sort("known_from").group_by("sec_id", maintain_order=True).tail(1)
+    return observations.join(latest, on="sec_id", how="left")
+
+
 def assert_pit_matches_truth(
     pit_result: pl.DataFrame | pl.Series | _Sequence[_Any],
     reference_truth: pl.DataFrame | pl.Series | _Sequence[_Any] | _Any,
