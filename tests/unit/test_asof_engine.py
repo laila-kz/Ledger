@@ -578,3 +578,50 @@ class TestVectorizedEnginePerformance:
 
         # Performance Assertion: must execute in under 100ms
         assert duration_ms < 100.0, f"Engine exceeded 100ms latency budget: {duration_ms:.2f}ms"
+
+
+# =============================================================================
+# 8. Zero-Memory-Copy Arrow Sharing Verification
+# =============================================================================
+
+
+class TestZeroCopyMemoryTransfer:
+    """Verifies Arrow zero-copy memory interoperability between Polars and DuckDB."""
+
+    def test_arrow_zero_copy_roundtrip_duckdb_polars(self) -> None:
+        """Verify memory sharing between Polars and DuckDB via PyArrow without disk I/O."""
+        import duckdb
+        import pyarrow as pa
+
+        # 1. Create Polars DataFrame
+        num_rows = 50_000
+        df = pl.DataFrame(
+            {
+                "sec_id": ["SEC_AAPL_001"] * num_rows,
+                "price": [150.25 + i * 0.01 for i in range(num_rows)],
+            }
+        )
+
+        # 2. Export to PyArrow Table (zero-copy memory view)
+        arrow_table = df.to_arrow()
+        assert isinstance(arrow_table, pa.Table)
+        assert arrow_table.num_rows == num_rows
+
+        # 3. Register table directly in in-memory DuckDB connection (no temp files / CSVs)
+        con = duckdb.connect()
+        con.register("in_memory_arrow_view", arrow_table)
+
+        # 4. Query via DuckDB and extract Arrow stream directly
+        result_arrow = con.execute(
+            "SELECT sec_id, AVG(price) as avg_price, COUNT(*) as count FROM in_memory_arrow_view GROUP BY sec_id"
+        ).arrow()
+
+        # 5. Convert back to Polars from Arrow without serialization
+        result_pl = pl.from_arrow(result_arrow)
+
+        assert isinstance(result_pl, pl.DataFrame)
+        assert result_pl.height == 1
+        assert result_pl["count"][0] == num_rows
+        assert result_pl["sec_id"][0] == "SEC_AAPL_001"
+        assert result_pl["avg_price"][0] == pytest.approx(150.25 + (num_rows - 1) * 0.01 / 2.0)
+

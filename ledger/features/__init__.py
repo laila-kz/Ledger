@@ -7,6 +7,7 @@ from ledger.features.caf import (
 )
 from ledger.features.engine import (
     ObservationMatrix,
+    compute_features_as_of,
     join_features_as_of,
     join_single_feature_as_of,
     validate_observation_matrix,
@@ -35,6 +36,7 @@ __all__ = [
     "adjusted_close_as_of",
     "compute_caf_matrix",
     "compute_caf_scalar",
+    "compute_features_as_of",
     "get_global_registry",
     "join_features_as_of",
     "join_single_feature_as_of",

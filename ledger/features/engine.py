@@ -275,6 +275,8 @@ def join_single_feature_as_of(
         reserved.add(r_bound)
     if "ingestion_seq" in feat.columns:
         reserved.add("ingestion_seq")
+    if "trade_date" in feat.columns and "trade_date" not in entity_df.columns:
+        reserved.add("trade_date")
 
     feature_cols = [c for c in feat.columns if c not in reserved]
 
@@ -286,9 +288,15 @@ def join_single_feature_as_of(
             target_name = f"{target_name}_feature"
         renamed_cols[col] = target_name
 
-    if renamed_cols:
-        feat = feat.rename(renamed_cols)
-        feature_cols = list(renamed_cols.values())
+    # Filter right DataFrame to only join keys, optional bound, and feature columns
+    right_cols = [r_sec_id, r_time]
+    if r_bound and r_bound in feat.columns:
+        right_cols.append(r_bound)
+    for col in feature_cols:
+        if col not in right_cols:
+            right_cols.append(col)
+
+    feat_clean = feat.select(right_cols)
 
     # Sort left and right for ASOF join
     # Track original row order using a temporary index
@@ -296,7 +304,7 @@ def join_single_feature_as_of(
     left_sorted = entity_df.with_columns(pl.int_range(0, pl.len()).alias(orig_col)).sort(
         as_of_column
     )
-    right_sorted = feat.sort(r_time)
+    right_sorted = feat_clean.sort(r_time)
 
     # Execute backward ASOF join
     joined = left_sorted.join_asof(
@@ -418,3 +426,69 @@ def join_features_as_of(
         )
 
     return result_df
+
+
+def compute_features_as_of(
+    entity_df: pl.DataFrame,
+    feature_names: Sequence[str],
+    prices: pl.DataFrame | None = None,
+    splits: pl.DataFrame | None = None,
+    catalog: Any | None = None,
+    registry: Any | None = None,
+    as_of_column: str = "observation_timestamp",
+    sec_id_column: str = "sec_id",
+    keep_temporal_metadata: bool = False,
+) -> pl.DataFrame:
+    """Compute registered features dynamically and perform a Point-in-Time ASOF join.
+
+    Orchestrates the full declarative DAG workflow:
+    1. Resolves dependency graph and execution order for `feature_names` via FeatureRegistry.
+    2. Constructs a shared `FeatureContext` containing input prices, corporate actions, and catalog.
+    3. Executes each feature computation function in topological order, memoizing outputs.
+    4. Gathers target feature DataFrames and executes vectorized bitemporal ASOF joins.
+
+    Args:
+        entity_df: Observation matrix DataFrame [sec_id, observation_timestamp].
+        feature_names: List of registered feature names to compute and attach.
+        prices: Optional raw price DataFrame [sec_id, trade_date, close, ...].
+        splits: Optional corporate actions DataFrame [sec_id, ex_date, split_ratio, ...].
+        catalog: Optional LedgerCatalog or DuckDB connection.
+        registry: Optional FeatureRegistry instance (defaults to global registry).
+        as_of_column: Observation timestamp column in `entity_df`.
+        sec_id_column: Security ID column in `entity_df`.
+        keep_temporal_metadata: Whether to retain intermediate temporal metadata columns.
+
+    Returns:
+        Polars DataFrame containing observation matrix with requested features joined point-in-time.
+    """
+    import importlib
+
+    importlib.import_module("ledger.features.definitions")
+    from ledger.features.registry import FeatureContext, get_global_registry
+
+    reg = registry if registry is not None else get_global_registry()
+    resolved_defs = reg.resolve_execution_order(feature_names)
+
+    ctx = FeatureContext(
+        observations=entity_df,
+        prices=prices,
+        splits=splits,
+        catalog=catalog,
+    )
+
+    # Compute features in topological order
+    for feat_def in resolved_defs:
+        feat_output = feat_def.compute_fn(ctx)
+        ctx.custom[feat_def.name] = feat_output
+
+    # Collect target feature DataFrames
+    target_dfs = [ctx.custom[name] for name in feature_names]
+
+    return join_features_as_of(
+        entity_df=entity_df,
+        feature_views=target_dfs,
+        catalog=catalog,
+        as_of_column=as_of_column,
+        sec_id_column=sec_id_column,
+        keep_temporal_metadata=keep_temporal_metadata,
+    )
