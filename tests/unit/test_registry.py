@@ -387,14 +387,21 @@ class TestPipelineExecutionAndHashes:
 
     def test_global_registry_isolation_and_decorator(self) -> None:
         global_reg = get_global_registry()
-        global_reg.clear()
+        saved_features = dict(global_reg._features)
+        try:
+            global_reg.clear()
 
-        @register(name="global_feat_example", version="1.0.0")
-        def global_impl(ctx: FeatureContext) -> pl.DataFrame:
-            return pl.DataFrame()
+            @register(name="global_feat_example", version="1.0.0")
+            def global_impl(ctx: FeatureContext) -> pl.DataFrame:
+                return pl.DataFrame()
 
-        assert global_reg.has("global_feat_example")
+            assert global_reg.has("global_feat_example")
 
-        # Custom registry is isolated
-        custom_reg = FeatureRegistry()
-        assert not custom_reg.has("global_feat_example")
+            # Custom registry is isolated
+            custom_reg = FeatureRegistry()
+            assert not custom_reg.has("global_feat_example")
+        finally:
+            global_reg.clear()
+            global_reg._features.update(saved_features)
+
+
