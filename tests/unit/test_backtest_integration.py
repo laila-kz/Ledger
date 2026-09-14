@@ -16,9 +16,7 @@ def test_cli_writes_manifest_curves_and_weights(tmp_path: Path) -> None:
     rows: list[dict[str, object]] = []
     for offset in range(65):
         trade_date = date(2023, 1, 2) + timedelta(days=offset)
-        known_from = datetime.combine(trade_date, datetime.min.time(), tzinfo=UTC).replace(
-            hour=21
-        )
+        known_from = datetime.combine(trade_date, datetime.min.time(), tzinfo=UTC).replace(hour=21)
         for sec_id, slope in (("SEC_A_001", 1.0), ("SEC_B_001", 0.5)):
             rows.append(
                 {

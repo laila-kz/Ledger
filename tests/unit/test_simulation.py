@@ -33,12 +33,8 @@ def test_simulation_uses_drifted_weights_for_turnover() -> None:
         [1.0, abs(0.5 - 120.0 / 220.0) + abs(0.5 - 100.0 / 220.0)]
     )
     second_turnover = abs(0.5 - 120.0 / 220.0) + abs(0.5 - 100.0 / 220.0)
-    assert result["cost"].to_list() == pytest.approx(
-        [0.0005, second_turnover * 0.0005]
-    )
-    assert result["equity"][-1] == pytest.approx(
-        (1.10 - 0.0005) * (1.0 - second_turnover * 0.0005)
-    )
+    assert result["cost"].to_list() == pytest.approx([0.0005, second_turnover * 0.0005])
+    assert result["equity"][-1] == pytest.approx((1.10 - 0.0005) * (1.0 - second_turnover * 0.0005))
 
 
 def test_simulation_rejects_duplicate_price_keys() -> None:

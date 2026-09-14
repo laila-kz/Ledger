@@ -141,14 +141,8 @@ def compute_metrics(
     equity = [float(value) for value in ordered["equity"].to_list()]
     turnover = [float(value) for value in ordered["turnover"].to_list()]
     timestamps = ordered["observation_timestamp"].to_list()
-    growth = (
-        None
-        if not equity or not _all_finite(equity)
-        else equity[-1] / initial_capital - 1.0
-    )
-    annualized_cagr = cagr(
-        [initial_capital, equity[-1]], timestamps[0], timestamps[-1]
-    )
+    growth = None if not equity or not _all_finite(equity) else equity[-1] / initial_capital - 1.0
+    annualized_cagr = cagr([initial_capital, equity[-1]], timestamps[0], timestamps[-1])
     drawdown = max_drawdown(equity)
     return Metrics(
         cumulative_return=growth,

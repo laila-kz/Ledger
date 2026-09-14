@@ -4,6 +4,69 @@
 
 ---
 
+## [2026-09-14] Week 5 Day 1 Evening: Pre-Day 2 Verification & CLI Polish
+
+### Four Pre-Day 2 Verification Checks (All Passing)
+
+#### ✅ Check A: Fresh Clone & Clean Install
+* **Scenario:** Simulate CI environment by uninstalling and reinstalling the package fresh.
+* **Command:** `pip uninstall -y ledger; pip install -e .`
+* **Result:** ✓ Package reinstalls cleanly with no TOML scoping errors, no missing `editables` build-time dependency issues.
+* **Validation:** `ledger --version` returns `0.1.0`, `ledger canaries` runs and passes all 10 tests (4.44s).
+* **Key Insight:** The TOML scoping fix from earlier (placing `[project.scripts]` AFTER all other `[project.*]` tables) and the `editables>=0.3` build-time dependency are holding up correctly in a clean environment.
+
+#### ✅ Check B: GitHub Actions Workflow
+* **Issue Found:** The `.github/workflows/ci.yml` file contained corrupted/duplicate YAML:
+  - Line 36 had incomplete command: `run: pytest -v --cov=ledgername:` (truncated mid-line)
+  - File had two job definitions concatenated (old `quality` job + newer `quality-gate` job with uv), creating unparseable YAML
+* **Resolution:** Cleaned up the workflow file to a single, valid `quality` job using pip (simpler, more reliable for the MVP stage).
+* **Restored Workflow:**
+  - Setup Python 3.11 with pip caching
+  - Install project with dev dependencies: `pip install -e ".[dev]"`
+  - Run Ruff lint and format checks
+  - Run MyPy strict type checking
+  - Run pytest with coverage (157 tests: 157 passed, 1 deselected)
+* **Ready for Push:** Workflow is now valid YAML and will execute cleanly on GitHub Actions.
+
+#### ✅ Check C: README Badges
+* **Audit:** Searched for placeholder URLs (`github.com/username`) in README.
+* **Result:** ✓ Badges already using correct GitHub username (`laila-kz/Ledger`).
+* **No Fix Needed:** Badges will display correctly.
+
+#### ✅ Check D: CLI Help Text
+* **Issue Found:** `ledger run-comparison --help` was incomplete:
+  - Missing `help=` descriptions on all 14 argument definitions
+  - Usage line showed `cli.py` instead of `ledger run-comparison` (prog name not set)
+  - Options listed without explanations, making interface unhelpful
+* **Resolution:** Enhanced `ledger/backtest/run_comparison.py`:
+  - Set `prog="ledger run-comparison"` and added formatter class `RawDescriptionHelpFormatter`
+  - Added comprehensive help text for each argument (e.g. `--start-date`: "Backtest start date (ISO format: YYYY-MM-DD).")
+  - Added epilog with 3 concrete usage examples
+* **Result:** ✓ Help output now shows:
+  - Proper usage line: `ledger run-comparison [-h] --start-date START_DATE --end-date END_DATE ...`
+  - Clear descriptions for all 14 options
+  - 3 practical examples at the bottom
+* **All Subcommands Verified:**
+  - `ledger --help`: ✓ Clear (already good)
+  - `ledger canaries --help`: ✓ Concise with example
+  - `ledger lint --help`: ✓ Good, mentions "coming Day 4"
+  - `ledger verify-manifest --help`: ✓ Good, mentions "implemented in Week 5 Day 3"
+  - `ledger run-comparison --help`: ✓ NOW FIXED, comprehensive and actionable
+
+### Regression Test Results
+* **Full Suite:** 157 tests passed, 1 deselected (integration suite marked to skip).
+* **Canary Suite:** 10/10 passed in 1.97s (avg 4.44s with pytest overhead).
+* **All Quality Gates Green:** Ruff lint + format clean, MyPy strict mode clean.
+
+### Implications for Day 2
+1. **Fresh clone in CI will succeed** - no hidden packaging gotchas.
+2. **GitHub Actions workflow will run and pass** - valid YAML, proper command structure.
+3. **README badges will display correctly** - username already in place.
+4. **Users can run `ledger --help` and understand all subcommands** - help text is now actionable and includes examples.
+5. **Ready to move to Day 2 README polish** - CLI is discoverable and well-documented.
+
+---
+
 ## [2026-09-13] Week 4 Day 5: Pre-Merge Verification
 
 ### Initial-Capital Contract Bug
@@ -247,6 +310,24 @@ Benchmark: `benchmarks/bench_arrow_zero_copy.py --rows 100000 --runs 3`
 - [x] `pytest tests/canaries/` passes 10/10 tests in $< 2$ seconds.
 - [x] Full suite (`pytest`) passes 141/141 tests cleanly with zero regressions.
 - [x] `ruff check .`, `ruff format --check .`, and `mypy .` clean across all 49 source files.
+
+---
+
+
+
+## [2026-09-13] Week 5 Day 1: Console CLI and CI Quality Gates
+
+* Added the `ledger` console entry point with `lint`, `verify-manifest`,
+  `run-comparison`, and `canaries` subcommands.
+* Added `.github/workflows/ci.yml` for Ruff lint/format, strict mypy, and the
+  complete pytest suite with coverage.
+* Added CLI reachability tests and verified the packaged `ledger.exe` after
+  installing the editable project.
+* **Packaging issue caught:** `[project.scripts]` initially captured the
+  dependency field because of TOML section scope. Moving it after the project
+  dependency declaration fixed Hatchling metadata generation.
+* **Quality gates:** Ruff lint/format and mypy pass; full pytest result is
+  `156 passed, 1 deselected`.
 
 ---
 

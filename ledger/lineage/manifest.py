@@ -212,7 +212,7 @@ def _git_is_dirty(repo_root: Path) -> bool | None:
 
 
 def _jsonable(value: Any) -> Any:
-    if is_dataclass(value):
+    if is_dataclass(value) and not isinstance(value, type):
         return _jsonable(asdict(value))
     if isinstance(value, Mapping):
         return {str(key): _jsonable(item) for key, item in value.items()}

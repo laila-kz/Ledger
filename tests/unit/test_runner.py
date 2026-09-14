@@ -16,9 +16,7 @@ def _price_frame(num_days: int = 65) -> pl.DataFrame:
     rows: list[dict[str, object]] = []
     for offset in range(num_days):
         trade_date = base_date + timedelta(days=offset)
-        known_from = datetime.combine(trade_date, datetime.min.time(), tzinfo=UTC).replace(
-            hour=21
-        )
+        known_from = datetime.combine(trade_date, datetime.min.time(), tzinfo=UTC).replace(hour=21)
         for sec_id, slope in [("SEC_A_001", 1.0), ("SEC_B_001", 0.5)]:
             close = 100.0 + slope * offset
             rows.append(
@@ -78,13 +76,9 @@ def test_pipelines_diverge_before_split_is_known() -> None:
     rows: list[dict[str, object]] = []
     for offset in range(split_offset + 1):
         trade_date = base_date + timedelta(days=offset)
-        known_from = datetime.combine(trade_date, datetime.min.time(), tzinfo=UTC).replace(
-            hour=21
-        )
+        known_from = datetime.combine(trade_date, datetime.min.time(), tzinfo=UTC).replace(hour=21)
         a_raw = (
-            25.0 + 0.1 * offset
-            if offset < split_offset
-            else 100.0 + 0.1 * (offset - split_offset)
+            25.0 + 0.1 * offset if offset < split_offset else 100.0 + 0.1 * (offset - split_offset)
         )
         rows.extend(
             [
@@ -105,10 +99,7 @@ def test_pipelines_diverge_before_split_is_known() -> None:
 
     raw_prices = pl.DataFrame(rows)
     preadjusted = raw_prices.with_columns(
-        pl.when(
-            (pl.col("sec_id") == "SEC_A_001")
-            & (pl.col("trade_date") < split_date)
-        )
+        pl.when((pl.col("sec_id") == "SEC_A_001") & (pl.col("trade_date") < split_date))
         .then(pl.col("close") * 4.0)
         .otherwise(pl.col("close"))
         .alias("close")
@@ -119,9 +110,7 @@ def test_pipelines_diverge_before_split_is_known() -> None:
             "ex_date": [split_date],
             "split_ratio": [4.0],
             "known_from": [
-                datetime.combine(split_date, datetime.min.time(), tzinfo=UTC).replace(
-                    hour=23
-                )
+                datetime.combine(split_date, datetime.min.time(), tzinfo=UTC).replace(hour=23)
             ],
         }
     )

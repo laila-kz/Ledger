@@ -194,19 +194,14 @@ def _prepare_leaky_prices(prices: pl.DataFrame) -> pl.DataFrame:
     if "adj_close" not in result.columns:
         result = result.with_columns(pl.col("close").alias("adj_close"))
     return result.with_columns(
-        pl.col("trade_date")
-        .cast(pl.Datetime("us"))
-        .dt.replace_time_zone("UTC")
-        .alias("known_from")
+        pl.col("trade_date").cast(pl.Datetime("us")).dt.replace_time_zone("UTC").alias("known_from")
     )
 
 
 def _prepare_leaky_view(view: pl.DataFrame) -> pl.DataFrame:
     if "known_from" not in view.columns:
         raise ValueError("Leaky feature views must contain a known_from column.")
-    return view.with_columns(
-        pl.col("known_from").dt.truncate("1d").alias("known_from")
-    )
+    return view.with_columns(pl.col("known_from").dt.truncate("1d").alias("known_from"))
 
 
 def _simulation_prices(features: pl.DataFrame) -> pl.DataFrame:

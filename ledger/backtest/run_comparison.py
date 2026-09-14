@@ -25,28 +25,107 @@ UTC = timezone.utc
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run Ledger's comparative backtest.")
-    parser.add_argument("--start-date", "--start", dest="start_date", required=True)
-    parser.add_argument("--end-date", "--end", dest="end_date", required=True)
+    parser = argparse.ArgumentParser(
+        prog="ledger run-comparison",
+        description="Run Ledger's comparative backtest.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  ledger run-comparison --start-date 2018-01-01 --end-date 2023-12-31\n"
+            "  ledger run-comparison --start-date 2018-01-01 --end-date 2023-12-31 "
+            "--tickers AAPL MSFT NVDA\n"
+            "  ledger run-comparison --start-date 2018-01-01 --end-date 2023-12-31 "
+            "--cost-bps 10 --rebalance-frequency weekly"
+        ),
+    )
+    parser.add_argument(
+        "--start-date",
+        "--start",
+        dest="start_date",
+        required=True,
+        help="Backtest start date (ISO format: YYYY-MM-DD).",
+    )
+    parser.add_argument(
+        "--end-date",
+        "--end",
+        dest="end_date",
+        required=True,
+        help="Backtest end date (ISO format: YYYY-MM-DD).",
+    )
     parser.add_argument(
         "--tickers",
         nargs="+",
         default=["AAPL", "MSFT", "NVDA", "META", "GOOGL"],
+        help="List of tickers to backtest (default: AAPL MSFT NVDA META GOOGL).",
     )
-    parser.add_argument("--top-k", type=int, default=3)
-    parser.add_argument("--cost-bps", type=float, default=5.0)
-    parser.add_argument("--initial-capital", type=float, default=1.0)
     parser.add_argument(
-        "--rebalance-frequency", choices=("daily", "weekly"), default="daily"
+        "--top-k",
+        type=int,
+        default=3,
+        help="Number of top momentum stocks to hold (default: 3).",
     )
-    parser.add_argument("--weekly-rebalance-day", type=int, default=0)
-    parser.add_argument("--data-root", type=Path, default=Path("data/raw"))
-    parser.add_argument("--prices-path", type=Path)
-    parser.add_argument("--preadjusted-prices-path", type=Path)
-    parser.add_argument("--splits-path", type=Path)
-    parser.add_argument("--artifacts-root", type=Path, default=Path("artifacts/runs"))
-    parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--cost-bps",
+        type=float,
+        default=5.0,
+        help="Transaction cost in basis points (default: 5.0).",
+    )
+    parser.add_argument(
+        "--initial-capital",
+        type=float,
+        default=1.0,
+        help="Portfolio initial capital in dollars (default: 1.0).",
+    )
+    parser.add_argument(
+        "--rebalance-frequency",
+        choices=("daily", "weekly"),
+        default="daily",
+        help="Rebalancing frequency (default: daily).",
+    )
+    parser.add_argument(
+        "--weekly-rebalance-day",
+        type=int,
+        default=0,
+        help="Day of week for weekly rebalancing, 0=Monday (default: 0).",
+    )
+    parser.add_argument(
+        "--data-root",
+        type=Path,
+        default=Path("data/raw"),
+        help="Root directory for raw market data (default: data/raw).",
+    )
+    parser.add_argument(
+        "--prices-path",
+        type=Path,
+        help="Path to raw prices parquet file (overrides --data-root).",
+    )
+    parser.add_argument(
+        "--preadjusted-prices-path",
+        type=Path,
+        help="Path to pre-adjusted prices parquet file (downloaded from yfinance if omitted).",
+    )
+    parser.add_argument(
+        "--splits-path",
+        type=Path,
+        help="Path to corporate actions (splits) parquet file.",
+    )
+    parser.add_argument(
+        "--artifacts-root",
+        type=Path,
+        default=Path("artifacts/runs"),
+        help="Root directory for output artifacts (default: artifacts/runs).",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging output.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run without writing artifacts.",
+    )
     return parser
 
 
@@ -116,11 +195,9 @@ def _run(args: argparse.Namespace) -> int:
             transaction_cost_bps=args.cost_bps,
             initial_capital=args.initial_capital,
         ),
-        leaky_universe=tickers,
+        leaky_universe=tuple(tickers),
     )
-    periods_per_year = (
-        52 if args.rebalance_frequency == "weekly" else TRADING_DAYS_PER_YEAR
-    )
+    periods_per_year = 52 if args.rebalance_frequency == "weekly" else TRADING_DAYS_PER_YEAR
     tear_sheet = build_tear_sheet(
         comparison.leaky.simulation,
         comparison.corrected.simulation,

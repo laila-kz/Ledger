@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "editables>=0.3"]
 build-backend = "hatchling.build"
 
 [project]
@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [
     { name = "Ledger Quant Engineering" }
 ]
+
 dependencies = [
     "polars>=0.20.0",
     "duckdb>=0.9.0",
@@ -24,6 +25,9 @@ dependencies = [
     "pandas>=2.0.0",
     "pytz>=2023.3",
 ]
+
+[project.scripts]
+ledger = "ledger.cli:main"
 
 [project.optional-dependencies]
 backtest = [

@@ -403,5 +403,3 @@ class TestPipelineExecutionAndHashes:
         finally:
             global_reg.clear()
             global_reg._features.update(saved_features)
-
-

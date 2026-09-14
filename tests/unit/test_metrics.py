@@ -20,9 +20,7 @@ UTC = timezone.utc
 
 def test_metric_formulas_and_guards() -> None:
     returns = [0.10, -0.05, 0.02]
-    assert annualized_volatility(returns, periods_per_year=1) == pytest.approx(
-        0.0750555, rel=1e-5
-    )
+    assert annualized_volatility(returns, periods_per_year=1) == pytest.approx(0.0750555, rel=1e-5)
     assert sharpe_ratio(returns, periods_per_year=1) == pytest.approx(
         sum(returns) / 3 / annualized_volatility(returns, 1)
     )

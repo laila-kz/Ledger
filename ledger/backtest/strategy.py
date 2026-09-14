@@ -69,9 +69,9 @@ def generate_target_weights(
         )
 
     if features.is_empty():
-        return features.select(
-            ["observation_timestamp", "sec_id"]
-        ).with_columns(pl.lit(0.0).alias("weight"))
+        return features.select(["observation_timestamp", "sec_id"]).with_columns(
+            pl.lit(0.0).alias("weight")
+        )
 
     result = features.with_columns(
         pl.lit(0.0).cast(pl.Float64).alias("weight"),
@@ -87,9 +87,7 @@ def generate_target_weights(
     )
 
     if strategy_config.rebalance_frequency == "weekly":
-        eligible = eligible.filter(
-            pl.col("_weekday") == strategy_config.weekly_rebalance_day + 1
-        )
+        eligible = eligible.filter(pl.col("_weekday") == strategy_config.weekly_rebalance_day + 1)
 
     ranked = (
         eligible.with_columns(
@@ -109,16 +107,18 @@ def generate_target_weights(
         .select(["observation_timestamp", "sec_id", "_selected_weight"])
     )
 
-    result = result.join(
-        ranked, on=["sec_id", "observation_timestamp"], how="left"
-    ).with_columns(
+    result = result.join(ranked, on=["sec_id", "observation_timestamp"], how="left").with_columns(
         pl.coalesce([pl.col("_selected_weight"), pl.col("weight")]).alias("weight")
     )
 
     if strategy_config.rebalance_frequency == "weekly":
-        result = result.sort(["sec_id", "observation_timestamp"]).with_columns(
-            pl.col("weight").replace(0.0, None).forward_fill().over("sec_id").fill_null(0.0)
-        ).filter(pl.col("_weekday") == strategy_config.weekly_rebalance_day + 1)
+        result = (
+            result.sort(["sec_id", "observation_timestamp"])
+            .with_columns(
+                pl.col("weight").replace(0.0, None).forward_fill().over("sec_id").fill_null(0.0)
+            )
+            .filter(pl.col("_weekday") == strategy_config.weekly_rebalance_day + 1)
+        )
 
     return result.select(["observation_timestamp", "sec_id", "weight"])
 

@@ -62,9 +62,7 @@ def simulate_portfolio(
         weights.select("observation_timestamp")
         .unique()
         .sort("observation_timestamp")
-        .with_columns(
-            pl.col("observation_timestamp").shift(-1).alias("next_timestamp")
-        )
+        .with_columns(pl.col("observation_timestamp").shift(-1).alias("next_timestamp"))
         .drop_nulls("next_timestamp")
     )
 
@@ -83,9 +81,7 @@ def simulate_portfolio(
             how="inner",
         )
         .rename({simulation_config.price_column: "current_price"})
-        .with_columns(
-            (pl.col("next_price") / pl.col("current_price") - 1.0).alias("asset_return")
-        )
+        .with_columns((pl.col("next_price") / pl.col("current_price") - 1.0).alias("asset_return"))
         .select(
             [
                 "observation_timestamp",
@@ -111,9 +107,7 @@ def simulate_portfolio(
             * (1.0 + pl.col("asset_return"))
             / (
                 1.0
-                + pl.col("weight").mul(pl.col("asset_return")).sum().over(
-                    "observation_timestamp"
-                )
+                + pl.col("weight").mul(pl.col("asset_return")).sum().over("observation_timestamp")
             )
         ).alias("drifted_weight")
     ).select(["next_timestamp", "sec_id", "drifted_weight"])
@@ -133,17 +127,13 @@ def simulate_portfolio(
     cost_rate = simulation_config.transaction_cost_bps / 10_000.0
     return (
         gross_returns.join(turnover, on="observation_timestamp", how="left")
-        .with_columns(
-            (pl.col("turnover") * cost_rate).alias("cost")
-        )
-        .with_columns(
-            (pl.col("gross_return") - pl.col("cost")).alias("net_return")
-        )
+        .with_columns((pl.col("turnover") * cost_rate).alias("cost"))
+        .with_columns((pl.col("gross_return") - pl.col("cost")).alias("net_return"))
         .sort("observation_timestamp")
         .with_columns(
-            (
-                (1.0 + pl.col("net_return")).cum_prod() * simulation_config.initial_capital
-            ).alias("equity")
+            ((1.0 + pl.col("net_return")).cum_prod() * simulation_config.initial_capital).alias(
+                "equity"
+            )
         )
     )
 
