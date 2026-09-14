@@ -1,52 +1,36 @@
-name: CI Quality Gate
+name: CI
 
 on:
   push:
-    branches: ["main", "Work-in-progress", "feat/**"]
+    branches: [main]
   pull_request:
-    branches: ["main", "Work-in-progress"]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  quality-gate:
-    name: Lint, Type Check & Test
+  quality:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
-
     steps:
-      - name: Checkout Repository
+      - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
         with:
-          version: "latest"
-          enable-cache: true
+          fetch-depth: 0
 
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
 
-      - name: Install Dependencies
-        run: |
-          uv sync --all-extras --dev
+      - name: Install project and tooling
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
 
-      - name: Run Ruff Lint Check
-        run: |
-          uv run ruff check .
+      - name: Ruff lint
+        run: ruff check .
 
-      - name: Run Ruff Format Check
-        run: |
-          uv run ruff format --check .
+      - name: Ruff format
+        run: ruff format --check .
 
-      - name: Run MyPy (Strict Mode)
-        run: |
-          uv run mypy .
+      - name: Mypy strict type check
+        run: mypy ledger
 
-      - name: Run Pytest & Canary Suite
-        run: |
-          uv run pytest --cov=ledger --cov-report=term-missing
+      - name: Unit and canary tests
+        run: pytest -v --cov=ledger --cov-report=term-missing
