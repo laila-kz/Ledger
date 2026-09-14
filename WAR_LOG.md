@@ -4,6 +4,61 @@
 
 ---
 
+## [2026-09-14] Week 5 Day 1 Late Evening: GitHub Actions Workflow Repair
+
+### Root Cause of All 24 Workflow Failures
+
+**Symptom:** All 24 GitHub Actions workflow runs were failing with error:
+```
+Error: No file in /home/runner/work/Ledger/Ledger matched to [**/uv.lock], 
+make sure you have checked out the target repository
+```
+This occurred in the "Install uv" step of the CI workflow.
+
+**Root Cause:** The `.github/workflows/ci.yml` file on the `main` branch (and initially on `Work-in-progress`) was using a `uv`-based workflow that required:
+1. Installing the Astral `setup-uv` GitHub Action
+2. A `uv.lock` file to be present in the repository
+3. Running all tests via `uv run pytest` instead of direct pytest
+
+However, the repository had **no `uv.lock` file committed**, causing every workflow run to fail immediately at the "Install uv" step.
+
+**The Branching Problem:** 
+- The `Work-in-progress` branch had an older commit with a *partial* corrected pip-based workflow (from earlier in the evening during pre-Day 2 verification)
+- The `main` branch still had the broken uv-based workflow with the `[**/uv.lock]` glob pattern
+- GitHub Actions was running against the `main` branch version, which was broken
+
+**Resolution Applied:**
+1. **Removed uv dependency entirely** - Replaced the entire workflow with a simpler, more reliable pip-based approach
+2. **Correct workflow structure:**
+   - Python 3.11 setup (single version, not a matrix)
+   - `pip install --upgrade pip && pip install -e ".[dev]"`
+   - Direct ruff, mypy, and pytest invocations (no uv wrapper)
+   - No `uv.lock` requirement
+
+3. **Pushed fix to both branches:**
+   - Committed fix to `main` (commit `a3c8fd7`)
+   - Merged `main` into `Work-in-progress` to keep branches synchronized
+
+**Why This Matters:**
+The uv-based workflow adds unnecessary complexity for the MVP:
+- Requires maintaining an additional lockfile in version control
+- Adds extra dependency resolution overhead in CI
+- The same quality gates work perfectly with standard pip
+- pip is simpler, more predictable, and available on all runners
+
+**Lesson:** When using GitHub Actions in an MVP, prefer:
+- Direct tool invocations over language-specific package managers
+- Single Python version (not a matrix) for faster feedback
+- Simple proven workflows over aspirational automation setups
+
+**Verification:**
+- Workflow is now valid YAML (no truncation, no duplicates)
+- Both `main` and `Work-in-progress` branches have the corrected version
+- No `uv.lock` requirement
+- Next workflow run should go green across all steps
+
+---
+
 ## [2026-09-14] Week 5 Day 1 Evening: Pre-Day 2 Verification & CLI Polish
 
 ### Four Pre-Day 2 Verification Checks (All Passing)
