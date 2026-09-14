@@ -22,6 +22,35 @@ MANIFEST_FILENAME = "manifest.json"
 LOCKFILE_CANDIDATES = ("uv.lock", "poetry.lock", "requirements.txt")
 
 
+class ManifestVerificationResult:
+    """Results of manifest verification."""
+
+    def __init__(self) -> None:
+        self.passed = True
+        self.checks: list[tuple[str, bool, str | None]] = []
+
+    def add_check(self, name: str, passed: bool, error: str | None = None) -> None:
+        """Record a verification check result."""
+        self.checks.append((name, passed, error))
+        if not passed:
+            self.passed = False
+
+    def __str__(self) -> str:
+        """Format verification results for display."""
+        lines = ["Manifest Verification Results", "=" * 40]
+        for name, passed, error in self.checks:
+            status = "✓ PASS" if passed else "✗ FAIL"
+            lines.append(f"{status}: {name}")
+            if error:
+                lines.append(f"         → {error}")
+        status_line = "\n" + ("=" * 40)
+        if self.passed:
+            status_line += "\nOverall: PASSED ✓"
+        else:
+            status_line += "\nOverall: FAILED ✗"
+        return "\n".join(lines) + status_line
+
+
 def sha256_file(path: Path | str) -> str:
     """Return a prefixed SHA-256 digest for a file."""
     hasher = hashlib.sha256()
@@ -29,6 +58,159 @@ def sha256_file(path: Path | str) -> str:
         while chunk := file_handle.read(1024 * 1024):
             hasher.update(chunk)
     return f"sha256:{hasher.hexdigest()}"
+
+
+def verify_manifest(
+    manifest_path: Path | str,
+    repo_root: Path | str | None = None,
+) -> ManifestVerificationResult:
+    """Verify that a manifest is unchanged and data is unaltered.
+
+    Checks:
+    - Manifest file is valid JSON
+    - Input files exist and match stored SHA-256 hashes
+    - Feature definitions match stored hashes
+    - Lockfile (if present) matches stored hash
+    - Git state is consistent
+    """
+    result = ManifestVerificationResult()
+    manifest_path = Path(manifest_path)
+    repo_root = Path(repo_root or ".").resolve()
+
+    # Load manifest
+    try:
+        manifest_text = manifest_path.read_text(encoding="utf-8")
+        manifest = json.loads(manifest_text)
+        result.add_check("Manifest JSON valid", True)
+    except (FileNotFoundError, json.JSONDecodeError) as error:
+        result.add_check("Manifest JSON valid", False, str(error))
+        return result
+
+    reproducible = manifest.get("reproducible", {})
+
+    # Verify input files
+    inputs = reproducible.get("inputs", [])
+    for input_entry in inputs:
+        path_str = input_entry.get("path")
+        expected_hash = input_entry.get("sha256")
+        if not path_str or not expected_hash:
+            continue
+
+        input_path = repo_root / path_str
+        check_name = f"Input file: {path_str}"
+
+        if not input_path.exists():
+            result.add_check(
+                check_name,
+                False,
+                f"File not found at {input_path}",
+            )
+            continue
+
+        try:
+            actual_hash = sha256_file(input_path)
+            if actual_hash == expected_hash:
+                result.add_check(check_name, True)
+            else:
+                result.add_check(
+                    check_name,
+                    False,
+                    f"Hash mismatch: expected {expected_hash}, got {actual_hash}",
+                )
+        except OSError as error:
+            result.add_check(check_name, False, f"Cannot read file: {error}")
+
+    # Verify feature definitions
+    features = reproducible.get("features", [])
+    import importlib
+
+    try:
+        importlib.import_module("ledger.features.definitions")
+        registry = get_global_registry()
+        for feature_entry in features:
+            name = feature_entry.get("feature_name")
+            expected_hash = feature_entry.get("definition_hash")
+            if not name or not expected_hash:
+                continue
+
+            check_name = f"Feature definition: {name}"
+            try:
+                definition = registry.get(name)
+                if definition is None:
+                    result.add_check(
+                        check_name,
+                        False,
+                        f"Feature not found in registry",
+                    )
+                    continue
+
+                actual_hash = definition.compute_hash()
+                if actual_hash == expected_hash:
+                    result.add_check(check_name, True)
+                else:
+                    result.add_check(
+                        check_name,
+                        False,
+                        f"Definition changed: expected {expected_hash}, got {actual_hash}",
+                    )
+            except Exception as error:
+                result.add_check(check_name, False, f"Cannot verify: {error}")
+    except ImportError:
+        result.add_check("Feature definitions available", False, "Cannot import feature defs")
+
+    # Verify lockfile
+    lockfile_entry = reproducible.get("lockfile", {})
+    lockfile_path = lockfile_entry.get("path")
+    expected_lockfile_hash = lockfile_entry.get("sha256")
+
+    if lockfile_path and expected_lockfile_hash:
+        check_name = f"Lockfile: {lockfile_path}"
+        full_path = repo_root / lockfile_path
+        if not full_path.exists():
+            result.add_check(check_name, False, "Lockfile not found")
+        else:
+            try:
+                actual_hash = sha256_file(full_path)
+                if actual_hash == expected_lockfile_hash:
+                    result.add_check(check_name, True)
+                else:
+                    result.add_check(
+                        check_name,
+                        False,
+                        f"Hash mismatch: expected {expected_lockfile_hash}, got {actual_hash}",
+                    )
+            except OSError as error:
+                result.add_check(check_name, False, f"Cannot read: {error}")
+
+    # Verify Git state
+    git_commit = reproducible.get("git_commit_sha")
+    current_commit = _git_value(repo_root, "rev-parse", "HEAD")
+    if git_commit and git_commit != "unknown" and current_commit != "unknown":
+        check_name = "Git commit SHA"
+        if git_commit == current_commit:
+            result.add_check(check_name, True)
+        else:
+            result.add_check(
+                check_name,
+                False,
+                f"Commit changed: manifest {git_commit}, current {current_commit}",
+            )
+
+    # Verify manifest integrity (run_id matches content)
+    run_id = manifest.get("run_id")
+    if run_id:
+        expected_run_id = _run_id(reproducible)
+        check_name = "Manifest run_id derivation"
+        if run_id == expected_run_id:
+            result.add_check(check_name, True)
+        else:
+            result.add_check(
+                check_name,
+                False,
+                f"Run ID mismatch: manifest {run_id}, computed {expected_run_id}",
+            )
+
+    return result
 
 
 def snapshot_input_files(
@@ -223,8 +405,10 @@ def _jsonable(value: Any) -> Any:
 
 __all__ = [
     "MANIFEST_FILENAME",
+    "ManifestVerificationResult",
     "build_manifest",
     "sha256_file",
     "snapshot_input_files",
+    "verify_manifest",
     "write_manifest",
 ]
