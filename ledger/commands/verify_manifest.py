@@ -14,10 +14,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ledger verify-manifest",
         description="Verify a Ledger run manifest for data integrity and reproducibility.",
-        epilog="Examples:\n  ledger verify-manifest artifacts/runs/<run_id>/manifest.json\n  ledger verify-manifest --repo-root . artifacts/runs/abc123/manifest.json",
+        epilog=(
+            "Examples:\n"
+            "  ledger verify-manifest artifacts/runs/<run_id>/manifest.json\n"
+            "  ledger verify-manifest --repo-root . artifacts/runs/abc123/manifest.json"
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("manifest", help="Path to manifest.json file to verify.")
+    parser.add_argument("manifest", nargs="?", help="Path to manifest.json file to verify.")
     parser.add_argument(
         "--repo-root",
         default=".",
@@ -32,6 +36,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = build_parser().parse_args(list(argv) if argv is not None else None)
     except SystemExit as error:
         return int(error.code) if isinstance(error.code, int) else 1
+
+    if args.manifest is None:
+        build_parser().print_help()
+        return 0
 
     manifest_path = Path(args.manifest)
     if not manifest_path.exists():
