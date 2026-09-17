@@ -1,0 +1,34 @@
+services:
+  # 1. Default service: Run the 10 Leakage Canary Tests
+  canaries:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["ledger", "canaries"]
+
+  # 2. Comparative Backtest Demo (Leaky vs. Point-in-Time Correct)
+  comparison:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["ledger", "run-comparison", "--synthetic", "--start-date", "2020-01-01", "--end-date", "2023-12-31"]
+    volumes:
+      - ./artifacts/runs:/workspace/artifacts/runs
+
+  # 3. Static AST Leakage Linter
+  lint:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["ledger", "lint", "examples/sample_strategy.py"]
+
+  # 4. Full Quality Gate & Test Suite (Pytest + Ruff + Strict MyPy)
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      sh -c "ruff check . &&
+             ruff format --check . &&
+             mypy ledger &&
+             pytest -v --cov=ledger"

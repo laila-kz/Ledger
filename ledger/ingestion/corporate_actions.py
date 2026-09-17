@@ -35,7 +35,7 @@ def _extract_date(dt_val: Any) -> date:
 
 
 def parse_splits_series(
-    splits_series: pd.Series,
+    splits_series: pd.Series[Any],
     sec_id: str,
     ingestion_seq: int,
     start_date: date | None = None,
@@ -79,7 +79,7 @@ def parse_splits_series(
 
 
 def parse_dividends_series(
-    divs_series: pd.Series,
+    divs_series: pd.Series[Any],
     sec_id: str,
     ingestion_seq: int,
     start_date: date | None = None,
