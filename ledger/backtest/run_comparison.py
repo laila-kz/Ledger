@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 import polars as pl
@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
+            "  ledger run-comparison --synthetic --start-date 2020-01-01 --end-date 2023-12-31\n"
             "  ledger run-comparison --start-date 2018-01-01 --end-date 2023-12-31\n"
             "  ledger run-comparison --start-date 2018-01-01 --end-date 2023-12-31 "
             "--tickers AAPL MSFT NVDA\n"
@@ -89,6 +90,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Day of week for weekly rebalancing, 0=Monday (default: 0).",
     )
     parser.add_argument(
+        "--synthetic",
+        "--demo",
+        dest="synthetic",
+        action="store_true",
+        help="Generate synthetic multi-ticker prices & corporate actions for offline demo.",
+    )
+    parser.add_argument(
         "--data-root",
         type=Path,
         default=Path("data/raw"),
@@ -143,6 +151,84 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
+def _generate_synthetic_data(
+    sec_ids: tuple[str, ...],
+    start_date: date,
+    end_date: date,
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    """Generate deterministic synthetic price bars and corporate actions."""
+    dates: list[date] = []
+    current = start_date
+    while current <= end_date:
+        if current.weekday() < 5:
+            dates.append(current)
+        current += timedelta(days=1)
+
+    if not dates:
+        raise ValueError("No weekday dates found within the specified date range.")
+
+    raw_rows: list[dict[str, object]] = []
+    preadj_rows: list[dict[str, object]] = []
+    midpoint_date = dates[len(dates) // 2]
+    split_sec_id = sec_ids[0]
+
+    for offset, d in enumerate(dates):
+        known_from = datetime.combine(d, time(21, 15), tzinfo=UTC)
+        for i, sec_id in enumerate(sec_ids):
+            base = 100.0 * (i + 1)
+            slope = (i + 1) * 0.5
+            current_level = base + slope * offset
+            if sec_id == split_sec_id and d < midpoint_date:
+                raw_close = current_level * 4.0
+            else:
+                raw_close = current_level
+
+            preadj_close = current_level
+
+            raw_rows.append(
+                {
+                    "sec_id": sec_id,
+                    "trade_date": d,
+                    "open": raw_close * 0.99,
+                    "high": raw_close * 1.01,
+                    "low": raw_close * 0.98,
+                    "close": raw_close,
+                    "volume": 1_000_000.0,
+                    "known_from": known_from,
+                }
+            )
+            preadj_rows.append(
+                {
+                    "sec_id": sec_id,
+                    "trade_date": d,
+                    "close": preadj_close,
+                }
+            )
+
+    splits_rows = [
+        {
+            "sec_id": split_sec_id,
+            "ex_date": midpoint_date,
+            "split_ratio": 4.0,
+            "known_from": datetime.combine(midpoint_date, time(21, 15), tzinfo=UTC),
+        }
+    ]
+
+    return (
+        pl.DataFrame(raw_rows),
+        pl.DataFrame(preadj_rows),
+        pl.DataFrame(
+            splits_rows,
+            schema={
+                "sec_id": pl.String,
+                "ex_date": pl.Date,
+                "split_ratio": pl.Float64,
+                "known_from": pl.Datetime("us", "UTC"),
+            },
+        ),
+    )
+
+
 def _run(args: argparse.Namespace) -> int:
     start_date = date.fromisoformat(args.start_date)
     end_date = date.fromisoformat(args.end_date)
@@ -151,34 +237,47 @@ def _run(args: argparse.Namespace) -> int:
     tickers = _normalise_tickers(args.tickers)
     sec_ids = tuple(f"SEC_{ticker}_001" for ticker in tickers)
 
-    raw_source = args.prices_path or (args.data_root / "market_ohlcv")
-    raw_prices = _read_parquet_source(raw_source, "raw prices")
-    raw_prices = _filter_prices(raw_prices, sec_ids, start_date, end_date)
-    _require_tickers(raw_prices, sec_ids, "raw prices")
-
-    split_source = args.splits_path or (args.data_root / "corporate_actions")
-    splits = _read_optional_splits(split_source, sec_ids, end_date)
-    observation_matrix = _build_observations(raw_prices, sec_ids, start_date, end_date)
-
-    preadjusted_source: Path | None = args.preadjusted_prices_path
-    if preadjusted_source is not None:
-        preadjusted = _filter_prices(
-            _read_parquet_source(preadjusted_source, "preadjusted prices"),
-            sec_ids,
-            start_date,
-            end_date,
-        )
+    if args.synthetic:
+        LOGGER.info("Generating synthetic market data for %d tickers.", len(tickers))
+        raw_prices, preadjusted, splits = _generate_synthetic_data(sec_ids, start_date, end_date)
+        observation_matrix = _build_observations(raw_prices, sec_ids, start_date, end_date)
+        input_snapshot = [
+            {
+                "path": "synthetic://deterministic-market-generator",
+                "sha256": "sha256:synthetic_deterministic_market_fixture_v1",
+                "size_bytes": len(raw_prices),
+                "modified_time_utc": datetime.now(timezone.utc).isoformat(),
+            }
+        ]
     else:
-        LOGGER.info("Downloading pre-adjusted control prices from yfinance.")
-        preadjusted = load_yfinance_preadjusted_prices(tickers, start_date, end_date)
-    _require_tickers(preadjusted, sec_ids, "preadjusted prices")
+        raw_source = args.prices_path or (args.data_root / "market_ohlcv")
+        raw_prices = _read_parquet_source(raw_source, "raw prices")
+        raw_prices = _filter_prices(raw_prices, sec_ids, start_date, end_date)
+        _require_tickers(raw_prices, sec_ids, "raw prices")
 
-    input_paths = [raw_source]
-    if split_source.exists():
-        input_paths.append(split_source)
-    if preadjusted_source is not None:
-        input_paths.append(preadjusted_source)
-    input_snapshot = snapshot_input_files(input_paths)
+        split_source = args.splits_path or (args.data_root / "corporate_actions")
+        splits = _read_optional_splits(split_source, sec_ids, end_date)
+        observation_matrix = _build_observations(raw_prices, sec_ids, start_date, end_date)
+
+        preadjusted_source: Path | None = args.preadjusted_prices_path
+        if preadjusted_source is not None:
+            preadjusted = _filter_prices(
+                _read_parquet_source(preadjusted_source, "preadjusted prices"),
+                sec_ids,
+                start_date,
+                end_date,
+            )
+        else:
+            LOGGER.info("Downloading pre-adjusted control prices from yfinance.")
+            preadjusted = load_yfinance_preadjusted_prices(tickers, start_date, end_date)
+        _require_tickers(preadjusted, sec_ids, "preadjusted prices")
+
+        input_paths = [raw_source]
+        if split_source.exists():
+            input_paths.append(split_source)
+        if preadjusted_source is not None:
+            input_paths.append(preadjusted_source)
+        input_snapshot = snapshot_input_files(input_paths)
 
     LOGGER.info("Running leaky and corrected pipelines for %d tickers.", len(tickers))
     comparison = run_comparison(
@@ -257,7 +356,14 @@ def _run(args: argparse.Namespace) -> int:
 def _read_parquet_source(source: Path, label: str) -> pl.DataFrame:
     files = _parquet_files(source)
     if not files:
-        raise ValueError(f"No Parquet files found for {label}: {source}")
+        hint = (
+            f"\n\nHint: Storage directory '{source}' contains no data partitions.\n"
+            "  - Run 'python scripts/seed_week1.py' to download data,\n"
+            "  - Or run with '--synthetic' for an instant offline demonstration backtest."
+            if "raw prices" in label
+            else ""
+        )
+        raise ValueError(f"No Parquet files found for {label}: {source}{hint}")
     return pl.concat([pl.read_parquet(file) for file in files], how="diagonal_relaxed")
 
 

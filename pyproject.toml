@@ -99,4 +99,5 @@ markers = [
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
+    "ignore:Sortedness of columns cannot be checked when 'by' groups provided:UserWarning",
 ]
