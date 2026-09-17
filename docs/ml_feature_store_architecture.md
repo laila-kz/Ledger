@@ -2,6 +2,8 @@
 
 > **Purpose:** Technical specification detailing how Ledger serves as a point-in-time feature store and data engineering platform for training and deploying machine learning (ML) models on temporal financial data without target leakage or training-serving skew.
 
+Ledger is designed for practitioners who need production-quality feature pipelines for finance, not a dashboard-centric application layer. The emphasis is on feature correctness, auditability, and reproducibility at the data-engineering boundary where leakage problems actually originate.
+
 ---
 
 ## 1. The Machine Learning Problem on Time-Series Data

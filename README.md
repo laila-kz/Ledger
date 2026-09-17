@@ -6,7 +6,17 @@
 
 **Bitemporal point-in-time feature storage and leakage-safe backtesting for quantitative research.**
 
+Ledger is a CLI-first data engineering toolkit for building auditable, time-aware feature stores and backtests that respect the information available at each decision point.
+
 ---
+
+## At a Glance
+
+- **Problem solved:** Eliminates lookahead bias and training-serving skew in quantitative research and ML pipelines.
+- **Core model:** Bitemporal valid-time / transaction-time semantics with point-in-time feature resolution.
+- **Primary interface:** Python CLI and reproducible artifacts, not a browser dashboard.
+- **Key outputs:** Parquet partitions, cryptographic manifests, and comparative tear-sheets for validation.
+- **Best fit:** Data engineers, quant researchers, and ML practitioners building finance-grade feature pipelines.
 
 ## Why This Exists
 
@@ -71,7 +81,9 @@ Ledger is intentionally a command-line, data-platform project rather than a web 
 
 This keeps the system focused on point-in-time data engineering, leakage-safe backtesting, and CLI-driven reproducibility rather than presentation-layer complexity.
 
-## Quick Start (4 Commands)
+## Quick Start
+
+The fastest way to evaluate the project is to install it locally, run the deterministic canaries, and then execute the synthetic comparison demo.
 
 ### 1. Install
 
@@ -164,6 +176,8 @@ This table demonstrates the risk of naive backtesting. Using a momentum strategy
 ---
 
 ## Developer Tooling
+
+The toolkit is intentionally oriented around reproducible engineering workflows rather than UI automation. The core developer commands are designed for CI, local validation, and feature-store inspection.
 
 ### `ledger canaries` — Deterministic Correctness Suite
 Runs all 10 canary tests in under 2 seconds. Asserts that PIT results match ground truth while naive pipelines diverge.
