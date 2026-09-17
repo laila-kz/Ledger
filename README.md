@@ -18,6 +18,22 @@ Ledger is a CLI-first data engineering toolkit for building auditable, time-awar
 - **Key outputs:** Parquet partitions, cryptographic manifests, and comparative tear-sheets for validation.
 - **Best fit:** Data engineers, quant researchers, and ML practitioners building finance-grade feature pipelines.
 
+### Example Output: Comparative Tear-Sheet
+
+```text
+┌─────────────────────┬──────────────┬──────────────┬────────────┐
+│ Metric              │ Leaky Result │ PIT-Correct  │ Difference │
+├─────────────────────┼──────────────┼──────────────┼────────────┤
+│ Total Return        │   +487%      │   +156%      │   -65%     │
+│ Sharpe Ratio        │   2.41       │   1.12       │   -54%     │
+│ Max Drawdown        │   -18.2%     │   -52.3%     │   -186%    │
+│ Annual Return       │   +33.4%     │   +9.8%      │   -71%     │
+│ Win Rate (daily)    │   58.2%      │   51.8%      │   -11%     │
+└─────────────────────┴──────────────┴──────────────┴────────────┘
+```
+
+This is the kind of output produced by the comparative backtest engine: a side-by-side view of naive lookahead performance versus the point-in-time-correct baseline.
+
 ## Why This Exists
 
 Most quantitative backtests fail in production not because the strategy is wrong, but because the backtest is lying. **Lookahead bias** silently infiltrates through six distinct mechanisms:
@@ -119,6 +135,12 @@ ledger run-comparison --synthetic --start-date 2020-01-01 --end-date 2023-12-31
 ```
 
 Generates the side-by-side performance tear-sheet comparing the naive leaky backtest with Ledger's point-in-time engine, saving equity curves, returns, weights, and a cryptographic `manifest.json`.
+
+For real-data ingestion, the repository includes the seed script at [scripts/seed_week1.py](scripts/seed_week1.py):
+
+```bash
+python scripts/seed_week1.py
+```
 
 ### 4. Run the Static AST Leakage Linter
 
@@ -273,25 +295,27 @@ tests/
 
 ---
 
-## For Recruiters & Interviewers
+## Architecture Highlights & Engineering Design
 
 This project demonstrates:
 
 - **Bitemporal Database Design:** Append-only storage with derived upper bounds using window functions, eliminating accidental data leakage.
 - **ASOF Join Semantics:** Custom `join_features_as_of()` engine with vectorized Polars/DuckDB backend, handling point-in-time correctness at scale.
 - **Production Correctness:** Deterministic test suite catching six classes of look-ahead bias before deployment.
-- **Systems Maturity:** Type-safe Python (MyPy strict mode), comprehensive CI/CD (GitHub Actions), documentation (Architecture Decision Records).
+- **Systems Maturity:** Type-safe Python (MyPy strict mode), comprehensive CI/CD (GitHub Actions), and architecture decision records.
 - **Financial Domain Knowledge:** Understanding of filings, corporate actions, entity resolution, and backtest tear-sheet metrics.
 
-**Interview Hook:** "Most quant backtests leak lookahead bias through six mechanisms. I built this suite to catch all of them deterministically before deployment."
+This is the engineering core of the project: a time-aware feature platform designed to make causal correctness explicit rather than implicit.
 
 ---
 
 ## References
 
 - **ML Feature Store Architecture:** [Point-in-Time ML & AI Specification](docs/ml_feature_store_architecture.md)
-- **ADR-001:** [Append-Only Derived Bounds](docs/adr/001-append-only-derived-bounds.md)
-- **ADR-002:** [Timezone & Timestamp Conventions](docs/adr/002-timezone-and-timestamp-conventions.md)
+- **ADR-0001:** [Bitemporal Interval Model](docs/adr/0001-bitemporal-interval-model.md)
+- **ADR-0002:** [DuckDB + Polars ASOF Engine](docs/adr/0002-duckdb-polars-asof-engine.md)
+- **ADR-0003:** [Hash-Verified Manifest](docs/adr/0003-hash-verified-manifest.md)
+- **ADR-0004:** [Static AST vs Runtime Canary Leakage Detection](docs/adr/0004-static-ast-vs-runtime-canary-leakage-detection.md)
 - **Canary Catalog:** [Detailed leakage defects & assertions](docs/canary_catalog.md)
 - **Week 3 Guide:** [Leakage canary implementation journal](guides/week-03-leakage-canary-suite.md)
 
@@ -299,7 +323,7 @@ This project demonstrates:
 
 ## License
 
-MIT. See [LICENSE](LICENSE) for details.
+This project is distributed under the MIT license as declared in the package metadata for the repository.
 
 ---
 
