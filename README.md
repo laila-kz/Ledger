@@ -65,6 +65,12 @@ graph TB
 
 ---
 
+## Product Scope & Interface
+
+Ledger is intentionally a command-line, data-platform project rather than a web application. There is no browser UI, dashboard, or frontend service in scope; the primary outputs are reproducible Parquet partitions, cryptographic manifests, and ASCII/Markdown tear-sheets designed for analysis and CI validation.
+
+This keeps the system focused on point-in-time data engineering, leakage-safe backtesting, and CLI-driven reproducibility rather than presentation-layer complexity.
+
 ## Quick Start (4 Commands)
 
 ### 1. Install
