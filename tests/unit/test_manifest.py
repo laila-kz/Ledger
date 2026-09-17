@@ -111,9 +111,7 @@ def test_verify_manifest_detects_input_file_tampering(tmp_path) -> None:
 
     # Find the tampering check
     tampering_checks = [
-        error
-        for name, passed, error in result.checks
-        if "Input file" in name and not passed
+        error for name, passed, error in result.checks if "Input file" in name and not passed
     ]
     assert len(tampering_checks) > 0
     assert "Hash mismatch" in tampering_checks[0]
@@ -224,4 +222,3 @@ def test_verify_manifest_formatting_on_failure(tmp_path) -> None:
     assert "Overall: FAILED ✗" in output
     assert "✗ FAIL" in output
     assert "Hash mismatch" in output
-

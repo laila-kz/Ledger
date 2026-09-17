@@ -47,7 +47,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     result = verify_manifest(manifest_path, repo_root=args.repo_root)
-    print(result)
+    output = str(result)
+    try:
+        print(output)
+    except UnicodeEncodeError:
+        safe_output = output.encode(sys.stdout.encoding or "ascii", errors="replace").decode(
+            sys.stdout.encoding or "ascii"
+        )
+        print(safe_output)
 
     return 0 if result.passed else 1
-

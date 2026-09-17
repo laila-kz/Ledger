@@ -96,6 +96,11 @@ def verify_manifest(
         if not path_str or not expected_hash:
             continue
 
+        if path_str.startswith("synthetic://"):
+            check_name = f"Input dataset: {path_str}"
+            result.add_check(check_name, True)
+            continue
+
         input_path = repo_root / path_str
         check_name = f"Input file: {path_str}"
 
@@ -135,15 +140,15 @@ def verify_manifest(
 
             check_name = f"Feature definition: {name}"
             try:
-                definition = registry.get(name)
-                if definition is None:
+                if not registry.has(name):
                     result.add_check(
                         check_name,
                         False,
-                        f"Feature not found in registry",
+                        "Feature not found in registry",
                     )
                     continue
 
+                definition = registry.get(name)
                 actual_hash = definition.compute_hash()
                 if actual_hash == expected_hash:
                     result.add_check(check_name, True)
