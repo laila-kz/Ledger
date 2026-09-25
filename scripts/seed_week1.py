@@ -20,6 +20,11 @@ BASE_DIR = Path("data/raw")
 
 
 def run_seed() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     print(f"=== [LEDGER SEED] Starting Week 1 Ingestion for {TICKERS} ===")
     print(f"Date range: {START_DATE} to {END_DATE}")
     print(f"Storage path: {BASE_DIR.absolute()}")
@@ -79,7 +84,7 @@ def run_seed() -> None:
         pre_split_equiv = aapl_close if aapl_close > 400.0 else aapl_close * 4.0
         print(f"Verified: AAPL pre-split price equivalent is ~${pre_split_equiv:.2f}.")
 
-    # Check TSLA price on 2020-08-28 (5:1 split on 2020-08-31)
+    # Check TSLA price on 2020-08-28 (5:1 split on 2020-08-31, 3:1 split on 2022-08-25)
     tsla_res = catalog.query(
         """
         SELECT trade_date, open, high, low, close
@@ -90,10 +95,16 @@ def run_seed() -> None:
     if len(tsla_res) > 0:
         tsla_close = float(tsla_res["close"][0])
         print(f"TSLA 2020-08-28 close price in storage: ${tsla_close:.2f}")
-        assert 300.0 < tsla_close < 2500.0, (
+        # yfinance returns fully split-adjusted base close (~$147), single split (~$442), or pre-split (~$2213)
+        assert 100.0 < tsla_close < 2500.0, (
             f"ERROR: TSLA price (${tsla_close:.2f}) is outside expected historical range."
         )
-        pre_split_equiv = tsla_close if tsla_close > 1800.0 else tsla_close * 5.0
+        if tsla_close > 1800.0:
+            pre_split_equiv = tsla_close
+        elif tsla_close > 300.0:
+            pre_split_equiv = tsla_close * 5.0
+        else:
+            pre_split_equiv = tsla_close * 15.0
         print(f"Verified: TSLA pre-split price equivalent is ~${pre_split_equiv:.2f}.")
 
     # Verify Corporate Actions split ratios
