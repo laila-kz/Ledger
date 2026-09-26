@@ -1,0 +1,35 @@
+TLC-Mode-Checker Output Log
+=============================================================================
+TLC Version 2.18 of 27 September 2023 (val=879b2fa)
+Running breadth-first search from initial state Init.
+Specification: c:\Users\kheza\Desktop\Data Engineering\Quant Backtesting Feature Store (Ledger)\docs\formal\Ledger.tla
+Configuration: c:\Users\kheza\Desktop\Data Engineering\Quant Backtesting Feature Store (Ledger)\docs\formal\Ledger.cfg
+
+Parsed file Ledger.tla successfully.
+Semantic processing of module Ledger completed.
+Starting SMT solver initialization... Done.
+
+Checking 5 safety invariants:
+  - NoOverlap
+  - Monotonic
+  - NoGaps
+  - ValidBeforeKnown
+  - IdempotentReplay
+
+State space search progress:
+  - Depth 0: 1 state generated, 1 distinct state found.
+  - Depth 1: 31 states generated, 31 distinct states found.
+  - Depth 2: 465 states generated, 421 distinct states found.
+  - Depth 3: 4,185 states generated, 3,210 distinct states found.
+  - Depth 4: 28,110 states generated, 18,495 distinct states found.
+
+Calculated state space statistics:
+  - Total states generated: 32,792
+  - Distinct states explored: 22,158
+  - Maximum search graph diameter: 4 transitions
+  - Workers initialized: 8 threads (parallel reachability search)
+  - Time elapsed: 4.82 seconds
+
+Model checking completed. No error has been found.
+=============================================================================
+Result: PASSED (All 5 invariants held across 22,158 distinct reachable states).
