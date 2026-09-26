@@ -348,6 +348,26 @@ def _run(args: argparse.Namespace) -> int:
     comparison.leaky.weights.write_parquet(run_dir / artifact_names["weights_leaky"])
     comparison.corrected.weights.write_parquet(run_dir / artifact_names["weights_corrected"])
     manifest_path = write_manifest(manifest, args.artifacts_root)
+
+    pdf_path = run_dir / "report.pdf"
+    try:
+        from ledger.backtest.pdf_report import generate_pdf_report
+
+        generate_pdf_report(
+            output_path=pdf_path,
+            run_id=manifest["run_id"],
+            leaky_metrics=tear_sheet.leaky,
+            corrected_metrics=tear_sheet.corrected,
+            leaky_equity=comparison.leaky.simulation.rename({"observation_timestamp": "timestamp"}),
+            corrected_equity=comparison.corrected.simulation.rename(
+                {"observation_timestamp": "timestamp"}
+            ),
+            manifest_data=manifest,
+        )
+        print(f"PDF Report: {pdf_path}")
+    except Exception as pdf_err:
+        LOGGER.warning("Could not generate PDF report: %s", pdf_err)
+
     print(f"Run ID: {manifest['run_id']}")
     print(f"Manifest: {manifest_path}")
     return 0
