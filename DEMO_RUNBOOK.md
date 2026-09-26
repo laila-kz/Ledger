@@ -1,17 +1,22 @@
-# Ledger: End-to-End Execution & Demo Video Runbook
+# Ledger: End-to-End Execution & Demo Video Runbook (Updated v0.2.0 with TLA+ Formal Verification)
 
 This guide provides a comprehensive, step-by-step walkthrough for running the entire **Ledger** project from start to finish. Use this document to verify system integrity, test all features, and follow a structured minute-by-minute script for recording a professional demo video.
+
+> [!IMPORTANT]
+> **Formal Verification Highlights (TLA+ & Hypothesis):**
+> Ledger features formal mathematical specification of the bitemporal state machine in TLA+ ([`docs/formal/Ledger.tla`](docs/formal/Ledger.tla)), model-checked across 22,158 states with zero invariant violations ([`docs/formal/tlc_run_log.txt`](docs/formal/tlc_run_log.txt)), and fuzzed via Hypothesis property tests ([`tests/property/`](tests/property/)).
 
 ---
 
 ## Technical Overview & Prerequisites
 
-**Ledger** is a bitemporal point-in-time feature store and leakage-prevention backtesting engine for quantitative research and ML feature pipelines.
+**Ledger** is a bitemporal point-in-time feature store, formal invariant verification system, and leakage-prevention backtesting engine for quantitative research and ML feature pipelines.
 
 ### Prerequisites & Requirements
 - **Python:** `3.10` or `3.11`
 - **Environment:** PowerShell (Windows), Bash (Linux/macOS), or Docker
-- **Dependencies:** `polars`, `duckdb`, `pyarrow`, `pytest`, `ruff`, `mypy`, `yfinance`
+- **Optional Tools:** Java (for running TLC model checker `tla2tools.jar` manually) or VS Code TLA+ extension
+- **Dependencies:** `polars`, `duckdb`, `pyarrow`, `pytest`, `hypothesis`, `ruff`, `mypy`, `yfinance`
 
 ---
 
@@ -31,8 +36,8 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-### 2. Run Quality Gates & Unit Test Suite
-Verify that all linters, strict type checkers, and tests pass:
+### 2. Run Quality Gates & Full Test Suite
+Verify that all linters, strict type checkers, unit tests, and property fuzzing tests pass:
 
 ```powershell
 # 1. Check code formatting & lint rules
@@ -41,28 +46,29 @@ Verify that all linters, strict type checkers, and tests pass:
 # 2. Check strict type safety
 .\.venv\Scripts\mypy ledger
 
-# 3. Run full test suite (174+ unit, integration, & canary tests)
+# 3. Run full test suite (180 unit, canary, & hypothesis property tests)
 .\.venv\Scripts\pytest
 ```
 
 **Expected Result:**
 - `ruff check`: `All checks passed!`
 - `mypy`: `Success: no issues found in 38 source files`
-- `pytest`: `174 passed`
+- `pytest`: `180 passed`
 
 ---
 
 ## Phase 2: Complete End-to-End Workflow Execution
 
-Follow these 6 sequential steps to run the complete data engineering pipeline from raw data ingestion to cryptographic lineage verification.
+Follow these 7 sequential steps to run the complete data engineering pipeline from raw data ingestion to formal TLA+ verification and cryptographic lineage check.
 
 ```mermaid
-flowchart LR
+flowchart TD
     Step1["1. Data Ingestion<br/>(seed_week1.py)"] --> Step2["2. AST Leakage Linter<br/>(ledger lint)"]
     Step2 --> Step3["3. Leakage Canaries<br/>(ledger canaries)"]
     Step3 --> Step4["4. Comparative Backtest<br/>(ledger run-comparison)"]
-    Step4 --> Step5["5. Lineage Manifest<br/>(ledger verify-manifest)"]
-    Step5 --> Step6["6. Docker Verification<br/>(docker compose)"]
+    Step4 --> Step5["5. Formal Verification<br/>(TLA+ Spec & Hypothesis Fuzzing)"]
+    Step5 --> Step6["6. Lineage Manifest<br/>(ledger verify-manifest)"]
+    Step6 --> Step7["7. Docker Verification<br/>(docker compose)"]
 ```
 
 ---
@@ -127,30 +133,63 @@ ledger run-comparison --synthetic --start-date 2020-01-01 --end-date 2023-12-31
 ┌─────────────────────┬──────────────┬──────────────┬────────────┐
 │ Metric              │ Leaky Result │ PIT-Correct  │ Difference │
 ├─────────────────────┼──────────────┼──────────────┼────────────┤
-│ Total Return        │   +487%      │   +156%      │   -65%     │
-│ Sharpe Ratio        │   2.41       │   1.12       │   -54%     │
-│ Max Drawdown        │   -18.2%     │   -52.3%     │   -186%    │
-│ Annual Return       │   +33.4%     │   +9.8%      │   -71%     │
-│ Win Rate (daily)    │   58.2%      │   51.8%      │   -11%     │
-└─────────────────────┴──────────────┴──────────────┴────────────┘
-```
+│ Total Return        │   +398%      │   +242%      │   -156%    │
+│ Sharpe Ratio        │   29.20      │   2.03       │   -27.17   │
+│ Max Drawdown        │   0.0%       │   -31.1%     │   -31.1%   │
+│ Annual Return       │   +49.5%     │   +36.1%     │   -13.4%   │
+│ Win Rate (daily)    │   95.3%      │   95.2%      │   -0.1%    │
 **Output Artifacts Created:**
-- Run directory created under `artifacts/runs/<RUN_ID>/`
+- `report.pdf` (Publication-grade 2-page institutional PDF tear-sheet with vector charts, canary audit table, and TLA+ verification seal)
 - `manifest.json` (SHA-256 fingerprint of inputs, feature definitions, and lockfile)
 - `metrics.json` (Sharpe, Drawdown, CAGR comparisons)
+- Equity & returns parquet partitions under `artifacts/runs/<RUN_ID>/`
 
 ---
 
-### Step 5: Verify Cryptographic Lineage Manifest
-Validate the reproducibility and integrity of the generated run manifest against repository source files.
+### Step 5: Execute Formal Invariant Verification (TLA+ & Hypothesis)
 
-*(Note: Every time `ledger run-comparison` finishes, it prints the exact `Run ID` at the bottom of the tear-sheet table!)*
+This step proves correctness using two complementary formal methods layers:
+1. **Mathematical State Machine Verification:** Inspect TLA+ specification [`docs/formal/Ledger.tla`](docs/formal/Ledger.tla) and TLC model checker logs ([`docs/formal/tlc_run_log.txt`](docs/formal/tlc_run_log.txt)).
+2. **Implementation Fuzzing:** Run Hypothesis property-based tests against `ledger/core/bitemporal.py`.
 
 ```powershell
-# Example using your generated run directory:
-ledger verify-manifest artifacts/runs/caa65cae9e7f4b33/manifest.json
+# 1. Run Hypothesis property-based fuzzing tests (1,700+ generated input samples)
+pytest tests/property/ -v
 
-# PowerShell tip: TAB autocomplete will fill in your latest run ID:
+# 2. Inspect captured TLA+ TLC model checker execution log (22,158 states explored)
+Get-Content docs/formal/tlc_run_log.txt
+
+# 3. (Optional) Run TLC Model Checker CLI directly if tla2tools.jar is installed:
+# java -cp tla2tools.jar tlc2.TLC -config docs/formal/Ledger.cfg docs/formal/Ledger.tla
+```
+
+**Verified TLA+ Invariants:**
+
+| Invariant | Mathematical Property | TLC Result |
+| :--- | :--- | :--- |
+| **`NoOverlap`** | $\forall r_1, r_2 \in \text{rows}: \neg \text{Overlaps}(r_1.known\_interval, r_2.known\_interval)$ | ✅ **0 Violations** (22,158 states) |
+| **`Monotonic`** | $\forall r \in \text{rows}: r.known\_from < r.known\_to \lor r.known\_to = -1$ | ✅ **0 Violations** |
+| **`NoGaps`** | $\forall r \in \text{rows}: r.known\_to \ne -1 \implies \exists r': r'.known\_from = r.known\_to$ | ✅ **0 Violations** |
+| **`ValidBeforeKnown`** | $\forall r \in \text{rows}: r.known\_from \ge r.valid\_from$ | ✅ **0 Violations** |
+| **`IdempotentReplay`** | Re-ingesting duplicate rows yields identical deterministic intervals | ✅ **0 Violations** |
+
+---
+
+### Step 6: Verify Cryptographic Lineage Manifest
+Validate the reproducibility and integrity of the generated run manifest against repository source files.
+
+> 💡 **How to find your Run ID if terminal history was cleared:**
+> List all generated run directories inside `artifacts/runs`:
+> - **PowerShell:** `Get-ChildItem artifacts/runs` or `dir artifacts/runs`
+> - **Linux/macOS:** `ls -l artifacts/runs`
+> 
+> Choose any run folder (e.g. `1e120042d1cf206e` or `dec0bd8c4d5a56e6`) to verify!
+
+```powershell
+# Verify manifest using a run ID from artifacts/runs:
+ledger verify-manifest artifacts/runs/1e120042d1cf206e/manifest.json
+
+# PowerShell tip: TAB autocomplete will automatically fill in your latest run ID:
 ledger verify-manifest artifacts/runs/<TAB>/manifest.json
 ```
 **Expected Output:**
@@ -168,7 +207,7 @@ Overall: PASSED ✓
 
 ---
 
-### Step 6: Verify Containerized Reproducibility (Docker)
+### Step 7: Verify Containerized Reproducibility (Docker)
 Demonstrate single-command containerized execution without local environment dependencies:
 
 ```bash
@@ -181,32 +220,38 @@ docker compose run --rm comparison
 
 ---
 
-## Phase 3: Demo Video Recording Script (5-Minute Walkthrough)
+## Phase 3: Demo Video Recording Script (6-Minute Walkthrough)
 
-Use this minute-by-minute transcript and visual guide when recording your demo video for portfolio presentation or technical interviews.
+Use this minute-by-minute transcript and visual guide when recording or presenting your demo video.
+
+> 📽️ **Recorded Video Asset:** [`docs/screenshots/Start-to-End-Demo-Run.mp4`](docs/screenshots/Start-to-End-Demo-Run.mp4)
+
+| Page 1: Institutional Performance Tear-Sheet | Page 2: Formal Verification & Lineage Certificate |
+|:-------------------------------------------:|:-------------------------------------------------:|
+| ![Report Page 1](docs/screenshots/Report-1.png) | ![Report Page 2](docs/screenshots/Report-2.png) |
 
 ---
 
 ### 🎬 Video Outline & Timestamp Guide
 
 #### ⏱️ **0:00 - 0:45 | Hook & Core Problem Statement**
-* **Visual:** Display terminal with clean repository layout & open [`README.md`](file:///c:/Users/kheza/Desktop/Data%20Engineering/Quant%20Backtesting%20Feature%20Store%20%28Ledger%29/README.md) side-by-side.
+* **Visual:** Display terminal with clean repository layout & open [`README.md`](README.md) side-by-side.
 * **Narration:**
-  > "Hi! Today I'm demonstrating **Ledger**, a finance-grade bitemporal feature store and backtest engine built to eliminate lookahead bias and training-serving skew in quantitative trading and ML pipelines. Most quantitative backtests fail in production because the backtest unknowingly consumes future data—like restated earnings, retroactive stock splits, or after-hours filings. Ledger enforces bitemporal point-in-time isolation to make backtests strictly auditable."
+  > "Hi! Today I'm demonstrating **Ledger**, a finance-grade bitemporal feature store, formal verification suite, and backtest engine built to eliminate lookahead bias and training-serving skew in quantitative trading and ML pipelines. Most quantitative backtests fail in production because the backtest unknowingly consumes future data—like restated earnings, retroactive stock splits, or after-hours filings. Ledger enforces bitemporal point-in-time isolation to make backtests strictly auditable."
 
 ---
 
 #### ⏱️ **0:45 - 1:30 | Data Ingestion & Bitemporal Schema**
 * **Visual:** Run `python scripts/seed_week1.py` in PowerShell. Show generated Parquet files in `artifacts/catalog/`.
 * **Narration:**
-  > "Let's start by seeding historical market data and corporate actions. Ledger uses DuckDB and Polars with Apache Arrow zero-copy memory transfers. All raw data is stored append-only with `known_from` transaction timestamps. Notice how we store raw pre-split prices and compute corporate action factors dynamically rather than retroactively mutating price history."
+  > "Let me show you our ingestion pipeline. Running `python scripts/seed_week1.py` ingests raw market OHLCV bars and corporate actions into append-only bitemporal Parquet partitions. Notice how we store raw pre-split prices and compute corporate action factors dynamically using `known_from` transaction timestamps, ensuring historical facts are never retroactively overwritten."
 
 ---
 
 #### ⏱️ **1:30 - 2:15 | AST Static Leakage Linter**
 * **Visual:** Run `ledger lint examples/sample_strategy.py`.
 * **Narration:**
-  > "Before running a backtest, developers can inspect their Python strategy code using Ledger's AST linter. Here, `ledger lint` analyzes the Abstract Syntax Tree of the strategy file, catching lookahead bugs like negative index shifting (`.shift(-1)`), unwindowed whole-dataset means, or unbounded forward fills before any data processing begins."
+  > "Before running a backtest, developers can inspect their Python strategy code using Ledger's static AST linter. Running `ledger lint` analyzes the Abstract Syntax Tree of the strategy file, catching lookahead anti-patterns like negative index shifting (`.shift(-1)`), unwindowed whole-dataset means, or unbounded forward fills before any data processing begins."
 
 ---
 
@@ -217,24 +262,31 @@ Use this minute-by-minute transcript and visual guide when recording your demo v
 
 ---
 
-#### ⏱️ **3:15 - 4:15 | Comparative Backtest & Side-by-Side Tear-Sheet**
-* **Visual:** Run `ledger run-comparison --start-date 2020-01-01 --end-date 2023-12-31`. Highlight the terminal ASCII tear-sheet table.
+#### ⏱️ **3:15 - 4:15 | Comparative Backtest & Institutional PDF Report**
+* **Visual:** Run `ledger run-comparison --synthetic --start-date 2020-01-01 --end-date 2023-12-31`. Open generated `artifacts/runs/<RUN_ID>/report.pdf`.
 * **Narration:**
-  > "Now, let's run the comparative backtest engine. Ledger runs the exact same momentum strategy across two parallel pipelines: a naive leaky pipeline and our point-in-time engine. Look at the resulting tear-sheet: the leaky backtest claims an unrealistically high Sharpe Ratio of 2.41 and +487% return. But our point-in-time engine reveals the realistic Sharpe of 1.12. Lookahead bias inflated Sharpe by 115% and hid severe drawdown risk!"
+  > "Now, let's run the comparative backtest engine. Ledger runs the exact same momentum strategy across two parallel pipelines: a naive leaky pipeline and our point-in-time engine. Notice that in addition to the terminal tear-sheet, Ledger automatically generates a publication-grade institutional PDF audit report (`report.pdf`). Look at the comparative matrix and underwater drawdown chart: the leaky backtest claims an unrealistically high Sharpe Ratio of 29.20 and +398% return. But our point-in-time engine reveals the realistic Sharpe of 2.03. Lookahead bias massively inflated Sharpe and completely masked drawdown risk!"
 
 ---
 
-#### ⏱️ **4:15 - 4:45 | Cryptographic Lineage Manifest**
+#### ⏱️ **4:15 - 5:15 | Formal Verification (TLA+ Spec & Hypothesis Fuzzing)**
+* **Visual:** Open [`docs/formal/Ledger.tla`](docs/formal/Ledger.tla) in editor, show [`docs/formal/tlc_run_log.txt`](docs/formal/tlc_run_log.txt), and run `pytest tests/property/`.
+* **Narration:**
+  > "Beyond empirical testing, Ledger features **Formal Verification**. We formally specified our bitemporal derivation state machine in **TLA+** (`docs/formal/Ledger.tla`) and used the TLC model checker to exhaustively explore 22,158 distinct reachable states, proving that intervals never overlap, transaction time is monotonic, and temporal causality holds. We then cross-validated our production Python implementation against the exact same 5 invariants using **Hypothesis property-based testing**, fuzzing over 1,700 generated event streams in CI!"
+
+---
+
+#### ⏱️ **5:15 - 5:45 | Cryptographic Lineage Manifest**
 * **Visual:** Run `ledger verify-manifest artifacts/runs/<RUN_ID>/manifest.json`.
 * **Narration:**
-  > "Every run automatically generates a cryptographic `manifest.json` recording SHA-256 digests of all raw input partitions, feature AST definitions, and locked dependencies. Running `ledger verify-manifest` guarantees complete production auditability and zero-copy reproducibility."
+  > "Every backtest automatically generates a cryptographic `manifest.json` recording SHA-256 digests of all raw input partitions, feature AST definitions, and locked dependencies. Running `ledger verify-manifest` guarantees complete production auditability and zero-copy reproducibility."
 
 ---
 
-#### ⏱️ **4:45 - 5:00 | Conclusion & Docker Reproducibility**
+#### ⏱️ **5:45 - 6:00 | Conclusion & Docker Reproducibility**
 * **Visual:** Run `docker compose run --rm canaries`. Show clean pass in Docker container.
 * **Narration:**
-  > "Finally, Ledger is fully containerized. Running `docker compose run --rm canaries` executes the complete harness in an isolated container. Ledger brings production-grade data engineering rigour to quantitative ML feature stores. Thank you for watching!"
+  > "Finally, Ledger is fully containerized. Running `docker compose run --rm canaries` executes the complete harness in an isolated container. Ledger brings formal correctness and production-grade data engineering rigour to quantitative ML feature stores. Thank you for watching!"
 
 ---
 
@@ -243,6 +295,7 @@ Use this minute-by-minute transcript and visual guide when recording your demo v
 | Issue / Symptom | Possible Cause | Resolution |
 | :--- | :--- | :--- |
 | `ModuleNotFoundError: No module named 'polars'` | Running command using system Python instead of venv | Use `.\.venv\Scripts\python.exe` or activate venv with `.\.venv\Scripts\Activate.ps1`. |
-| `UnicodeEncodeError` on checkmarks (`✓`/`✗`) | Windows console legacy `cp1252` encoding | Ledger includes safe fallback formatting in `verify_manifest.py`. Ensure latest pull. |
+| `ModuleNotFoundError: No module named 'hypothesis'` | Missing Hypothesis dev dependency | Run `pip install hypothesis` or `pip install -e ".[dev]"`. |
+| `UnicodeEncodeError` on checkmarks (`✓`/`✗`) | Windows console legacy `cp1252` encoding | Ledger includes safe fallback formatting in `verify_manifest.py` and `seed_week1.py`. Ensure latest pull. |
 | `No Parquet files found` when running comparison | Executing comparison in fresh clone before seeding data | Run `python scripts/seed_week1.py` first, or add `--synthetic` flag to `ledger run-comparison`. |
 | Docker permission / engine warning | Docker Desktop service not running | Start Docker Desktop or use local venv commands. |
