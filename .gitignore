@@ -51,3 +51,8 @@ artifacts/
 # OS
 .DS_Store
 Thumbs.db
+
+# Media & Large Files
+*.mp4
+*.zip
+*.tar.gz
