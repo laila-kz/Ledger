@@ -34,3 +34,6 @@ jobs:
 
       - name: Unit and canary tests
         run: pytest -v --cov=ledger --cov-report=term-missing
+
+      - name: Hypothesis property-based invariant tests
+        run: pytest tests/property/ -v --hypothesis-seed=42
