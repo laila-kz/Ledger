@@ -69,7 +69,7 @@ def test_no_gaps_between_contiguous_intervals(df: pl.DataFrame) -> None:
             kf_next = known_from_list[i + 1]
             assert kt_current == kf_next, (
                 f"Gap detected between contiguous records: row {i} known_to ({kt_current}) "
-                f"!= row {i+1} known_from ({kf_next})"
+                f"!= row {i + 1} known_from ({kf_next})"
             )
 
 
@@ -90,10 +90,12 @@ def test_idempotent_reingestion(df: pl.DataFrame) -> None:
     df_once = derive_known_to_polars(df, partition_by=["sec_id", "metric_name"])
 
     # Duplicate input dataset with distinct ingestion sequence offsets
-    duplicated_df = pl.concat([
-        df,
-        df.with_columns(pl.col("ingestion_seq") + 100),
-    ])
+    duplicated_df = pl.concat(
+        [
+            df,
+            df.with_columns(pl.col("ingestion_seq") + 100),
+        ]
+    )
     df_twice = derive_known_to_polars(duplicated_df, partition_by=["sec_id", "metric_name"])
 
     # First run outputs must match first half of duplicated run
