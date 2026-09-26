@@ -6,6 +6,7 @@ Ingests:
 - Verifies strictly unadjusted pricing across storage.
 """
 
+import contextlib
 import sys
 from pathlib import Path
 
@@ -21,10 +22,8 @@ BASE_DIR = Path("data/raw")
 
 def run_seed() -> None:
     if hasattr(sys.stdout, "reconfigure"):
-        try:
+        with contextlib.suppress(Exception):
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        except Exception:
-            pass
     print(f"=== [LEDGER SEED] Starting Week 1 Ingestion for {TICKERS} ===")
     print(f"Date range: {START_DATE} to {END_DATE}")
     print(f"Storage path: {BASE_DIR.absolute()}")
@@ -95,7 +94,8 @@ def run_seed() -> None:
     if len(tsla_res) > 0:
         tsla_close = float(tsla_res["close"][0])
         print(f"TSLA 2020-08-28 close price in storage: ${tsla_close:.2f}")
-        # yfinance returns fully split-adjusted base close (~$147), single split (~$442), or pre-split (~$2213)
+        # yfinance returns fully split-adjusted base close (~$147),
+        # single split (~$442), or pre-split (~$2213)
         assert 100.0 < tsla_close < 2500.0, (
             f"ERROR: TSLA price (${tsla_close:.2f}) is outside expected historical range."
         )
