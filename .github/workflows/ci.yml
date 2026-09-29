@@ -30,7 +30,10 @@ jobs:
         run: ruff format --check .
 
       - name: Mypy strict type check
-        run: mypy ledger
+        # Keep this identical to `make lint`. It previously ran `mypy ledger`,
+        # which type-checks a narrower target than the Makefile promises, so an
+        # untyped test could land green in CI while `make check` failed locally.
+        run: mypy .
 
       - name: Unit and canary tests
         run: pytest -v --cov=ledger --cov-report=term-missing
