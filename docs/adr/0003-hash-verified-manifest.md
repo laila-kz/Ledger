@@ -4,7 +4,7 @@
 * **Date:** 2026-09-14
 * **Authors:** Ledger Quantitative Data Engineering Team
 * **Deciders:** Core Architecture Team
-* **Technical Domain:** Lineage, Cryptographic Integrity & Reproducibility
+* **Technical Domain:** Lineage, Content Integrity & Reproducibility
 
 ---
 
@@ -15,13 +15,15 @@ A persistent crisis in quantitative strategy research is the "irreproducible bac
 2. **Feature Implementation Drift:** Feature extraction functions were refactored or modified in the codebase without a version bump.
 3. **Environment and Dependency Shifts:** Minor updates to underlying mathematical libraries (e.g. NumPy, Polars, SciPy) subtly altered floating-point outputs or seeding conventions.
 
-Without a cryptographic proof-of-work mechanism, quant teams cannot prove whether a historical backtest result was genuine or an artifact of post-hoc data tampering and temporal leakage.
+Without recorded content hashes, quant teams cannot tell whether a historical backtest result was genuine or an artifact of post-hoc data tampering and temporal leakage.
 
 ---
 
 ## 2. Decision
 
-> **We enforce a Cryptographic Run Manifest architecture where every backtest execution generates a canonical, content-addressable JSON manifest (`manifest.json`) capturing the exact SHA-256 checksums of raw input Parquet partitions, feature Python AST code, Git commit SHA, and environment dependency lockfiles.**
+> **We enforce a hash-verified Run Manifest architecture where every backtest execution generates a canonical, content-addressable JSON manifest (`manifest.json`) capturing the exact SHA-256 checksums of raw input Parquet partitions, feature Python AST code, Git commit SHA, and environment dependency lockfiles.**
+>
+> The digests are unsigned. They establish that a run can be re-derived from known inputs, which is what makes drift visible; they do not establish who produced the run, and a party able to rewrite the inputs can also rewrite the manifest.
 
 ### Structure of the Content-Addressable Manifest
 
@@ -85,7 +87,7 @@ We provide `ledger verify-manifest <manifest.json>` (`ledger.backtest.manifest.v
 ## 4. Alternatives Considered & Rejected
 
 ### Option A: Logging-Only Run Summaries
-- **Why Rejected:** Plain text logs do not record cryptographic hashes of input files or code ASTs. They cannot detect silent data restatements or retroactive edits.
+- **Why Rejected:** Plain text logs do not record content hashes of input files or code ASTs. They cannot detect silent data restatements or retroactive edits.
 
 ### Option B: Full Database Snapshotting
 - **Why Rejected:** Creating physical copies of entire databases per backtest run incurs massive disk storage explosion. Content-addressable SHA-256 manifests provide identical mathematical guarantees with zero redundant data duplication.

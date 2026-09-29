@@ -116,15 +116,15 @@ class NYSECalendarService:
 
         Rules:
         1. Market Data (EOD OHLCV bars):
-           - A daily bar for session D closes at e.g. 16:00 EST (or 13:00 on early close).
+           - A daily bar for session D closes at e.g. 16:00 ET (or 13:00 on early close).
            - Data becomes actionable after post-market consolidation buffer
-             (default 15 minutes: 16:15 EST / 13:15 EST).
+             (default 15 minutes: 16:15 ET / 13:15 ET).
         2. Non-Market Data (Filings, corporate actions, fundamental reports):
-           - If published during an active trading session (between 09:30 and 16:00 EST):
+           - If published during an active trading session (between 09:30 and 16:00 ET):
              Actionable immediately at event_time.
-           - If published after market close (>= 16:00 EST), before market open (< 09:30 EST),
+           - If published after market close (>= 16:00 ET), before market open (< 09:30 ET),
              or on a weekend/holiday:
-             Actionable at the NEXT trading session market open (09:30 EST).
+             Actionable at the NEXT trading session market open (09:30 ET).
 
         Args:
             event_time: The raw event timestamp.

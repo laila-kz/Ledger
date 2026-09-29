@@ -46,10 +46,10 @@
 
 ### Day 3: Tier 1 Canaries (Canary 03 & Canary 05)
 1. **Canary 03: After-Hours / Exchange Session (`test_canary_03_after_hours_session.py`)**
-   - **Scenario:** Company releases material earnings on Friday 2023-04-14 at 17:00 EST (post-market close).
+   - **Scenario:** Company releases material earnings on Friday 2023-04-14 at 17:00 ET (post-market close).
    - **Assertion:**
-     - A rebalance observation at Friday 15:59:00 EST cannot see this filing.
-     - Feature engine shifts actionable knowledge timestamp to Monday 2023-04-17 at 09:30:00 EST open.
+     - A rebalance observation at Friday 15:59:00 ET cannot see this filing.
+     - Feature engine shifts actionable knowledge timestamp to Monday 2023-04-17 at 09:30:00 ET open.
      - Assert look-ahead detection if filing is accessed during Friday's trading session.
 2. **Canary 05: Filing Lag Window (`test_canary_05_filing_lag_window.py`)**
    - **Scenario:** Fiscal quarter ends 2023-03-31. 10-Q filing accepted on SEC EDGAR on 2023-05-10.

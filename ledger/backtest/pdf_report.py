@@ -437,8 +437,8 @@ def generate_pdf_report(
     story.append(formal_table)
     story.append(Spacer(1, 12))
 
-    # Section 4: Cryptographic Lineage & Reproducibility Certificate
-    story.append(Paragraph("4. Cryptographic Lineage & Reproducibility Certificate", section_style))
+    # Section 4: Hash Lineage & Reproducibility Certificate
+    story.append(Paragraph("4. Hash Lineage & Reproducibility Certificate", section_style))
 
     manifest_hash = (
         manifest_data.get("manifest_hash", "sha256:7f8a...e9b1")
@@ -457,7 +457,7 @@ def generate_pdf_report(
     )
 
     cert_text = (
-        f"<b>Cryptographic Fingerprint Digest:</b><br/>"
+        f"<b>Hash Fingerprint Digest:</b><br/>"
         f"• <b>Manifest SHA-256:</b> <font color='#0284C7'>{manifest_hash}</font><br/>"
         f"• <b>Git Commit SHA:</b> <font color='#0284C7'>{git_commit}</font><br/>"
         f"• <b>Lockfile SHA-256:</b> <font color='#0284C7'>{lockfile_hash}</font><br/>"

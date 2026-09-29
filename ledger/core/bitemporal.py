@@ -73,7 +73,7 @@ class TransactionInterval(BaseModel):
     """Represents a Transaction / Knowledge Time interval [known_from, known_to).
 
     Transaction Time models when a fact was known and actionable to the system
-    (e.g., 10-Q filing accepted at 17:30 EST, or price bar published at 16:15 EST).
+    (e.g., 10-Q filing accepted at 17:30 ET, or price bar published at 16:15 ET).
 
     Invariants:
     - known_from <= known_to (when known_to is not None).

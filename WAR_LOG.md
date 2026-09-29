@@ -258,8 +258,8 @@ The uv-based workflow adds unnecessary complexity for the MVP:
 ### 2. Exchange Calendar & Actionable Time Resolver (`ledger/core/calendars.py`)
 * **NYSE Calendar (`XNYS`):** Encapsulated exchange hours, early session closes (e.g. 13:00 on Black Friday), and holidays (e.g. Juneteenth).
 * **Actionable Timestamps:**
-  * **EOD Bars (`is_market_data=True`):** 15-minute post-market buffer (16:00 close $\to$ 16:15 EST actionable; 13:00 early close $\to$ 13:15 EST actionable).
-  * **Filings/Reports (`is_market_data=False`):** In-session releases actionable immediately; after-hours (e.g. Friday 17:00 EST), pre-market, or weekend releases roll forward to next session market open (**09:30 EST**).
+  * **EOD Bars (`is_market_data=True`):** 15-minute post-market buffer (16:00 close $\to$ 16:15 ET actionable; 13:00 early close $\to$ 13:15 ET actionable).
+  * **Filings/Reports (`is_market_data=False`):** In-session releases actionable immediately; after-hours (e.g. Friday 17:00 ET), pre-market, or weekend releases roll forward to next session market open (**09:30 ET**).
 
 ### 3. Unit Test Coverage
 * Unit tests created in `tests/unit/test_bitemporal.py` and `tests/unit/test_calendars.py`.
@@ -317,7 +317,7 @@ The uv-based workflow adds unnecessary complexity for the MVP:
   - Mandatory `auto_adjust=False, actions=False` in `yf.download`.
   - Discard `Adj Close` column completely and store only raw `Open, High, Low, Close, Volume`.
   - Corporate actions (`fact_corporate_actions`) ingested separately from `.splits` and `.dividends` series.
-  - `known_from` convention: `ex_date` session close + 15 min buffer (16:15 EST / EDT converted to UTC).
+  - `known_from` convention: `ex_date` session close + 15 min buffer (16:15 ET converted to UTC).
 * **ADR Recorded:** Established [ADR-005: Corporate Action Timing and Known-From Resolution Convention](file:///docs/adr/005-corporate-action-known-from-convention.md).
 
 ### 2. Implementation Modules & CLI Tools
@@ -413,7 +413,7 @@ Benchmark: `benchmarks/bench_arrow_zero_copy.py --rows 100000 --runs 3`
 | :--- | :--- | :--- | :--- |
 | **01** | **Restated Fundamentals** | Retroactive insertion of amended EPS filings before they were known. | `known_to` bitemporal window exclusion via `derive_known_to_polars()`. |
 | **02** | **Retroactive Splits** | Static backward price deflation before split execution / announcement. | Dynamic Cumulative Adjustment Factor ($\text{CAF}$) evaluated as of observation timestamp. |
-| **03** | **After-Hours Sessions** | Post-market earnings filings consumed in closed Friday sessions. | Calendar-aware `get_actionable_timestamp()` shifting after-hours filings to next session open ($09:30\text{ EST}$). |
+| **03** | **After-Hours Sessions** | Post-market earnings filings consumed in closed Friday sessions. | Calendar-aware `get_actionable_timestamp()` shifting after-hours filings to next session open ($09:30\text{ ET}$). |
 | **04** | **Survivorship Bias** | Delisted entities (`LEHMQ`) pruned from historical trade universe. | Bitemporal universe membership with $[valid\_from, valid\_to)$ intervals. |
 | **05** | **Filing Lag Window** | Fiscal period end ($T+0$) assumed as filing availability date. | Strict separation of `fiscal_period_end` from SEC EDGAR acceptance timestamp (`known_from`). |
 | **06** | **Ticker Relabeling Drift** | Ticker renames (`FB` $\to$ `META`) fragmenting historical price series. | Permanent synthetic `sec_id` entity resolution with point-in-time ticker aliases. |

@@ -232,7 +232,7 @@ The canary suite (`tests/canaries/`) consists of programmatic test cases. Each c
 |---|---|---|---|---|
 | **01** | **Restated Fundamentals** | 1 | Q2 EPS originally filed at \$1.00, restated to \$0.70 in Nov. | Querying as-of Oct returns \$1.00; querying as-of Dec returns \$0.70. |
 | **02** | **Retroactive Split** | 1 | 4-for-1 split occurs in August 2020. | Pre-split (July 2020) price queried as-of July is unadjusted; CAF applied only post-effective date. |
-| **03** | **After-Hours / Session** | 1 | Earnings released Friday at 17:00 EST. | Actionable timestamp is shifted to Monday 09:30 open. Cannot be used for Friday 15:59 rebalance. |
+| **03** | **After-Hours / Session** | 1 | Earnings released Friday at 17:00 ET. | Actionable timestamp is shifted to Monday 09:30 open. Cannot be used for Friday 15:59 rebalance. |
 | **04** | **Survivorship Universe** | 2 | Delisted entity (e.g. bankrupt bank) removed from current ticker lists. | Querying universe as-of 2008 includes the delisted entity; querying as-of 2012 excludes it. |
 | **05** | **Filing Lag Window** | 1 | Quarter ends March 31; 10-Q filed May 10. | Features for Q1 are unavailable between March 31 and May 10. |
 | **06** | **Ticker Re-identification** | 2 | Asset rebrands from `OLD_TICK` to `NEW_TICK` in 2020. | Queries in 2018 resolve to `OLD_TICK` via `SecID` mapping without dropping history. |

@@ -59,7 +59,7 @@ Verify that all linters, strict type checkers, unit tests, and property fuzzing 
 
 ## Phase 2: Complete End-to-End Workflow Execution
 
-Follow these 7 sequential steps to run the complete data engineering pipeline from raw data ingestion to formal TLA+ verification and cryptographic lineage check.
+Follow these 7 sequential steps to run the complete data engineering pipeline from raw data ingestion to formal TLA+ verification and hash lineage check.
 
 ```mermaid
 flowchart TD
@@ -187,7 +187,7 @@ Get-Content docs/formal/tlc_run_log.txt
 
 ---
 
-### Step 6: Verify Cryptographic Lineage Manifest
+### Step 6: Verify Hash Lineage Manifest
 Validate the reproducibility and integrity of the generated run manifest against repository source files.
 
 > 💡 **How to find your Run ID if terminal history was cleared:**
@@ -292,10 +292,10 @@ Use this minute-by-minute transcript and visual guide when recording or presenti
 
 ---
 
-#### ⏱️ **5:15 - 5:45 | Cryptographic Lineage Manifest**
+#### ⏱️ **5:15 - 5:45 | Hash Lineage Manifest**
 * **Visual:** Run `ledger verify-manifest artifacts/runs/<RUN_ID>/manifest.json`.
 * **Narration:**
-  > "Every backtest automatically generates a cryptographic `manifest.json` recording SHA-256 digests of all raw input partitions, feature AST definitions, and locked dependencies. Running `ledger verify-manifest` guarantees complete production auditability and zero-copy reproducibility."
+  > "Every backtest automatically generates a `manifest.json` recording SHA-256 digests of all raw input partitions, feature AST definitions, and locked dependencies. Running `ledger verify-manifest` confirms the run was produced by exactly these inputs, so any drift in code, config, or data shows up as a mismatch instead of a quietly different result."
 
 ---
 

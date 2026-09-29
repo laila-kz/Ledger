@@ -531,20 +531,42 @@ class TestMultiFeatureJoinsAndCatalog:
 
 
 class TestVectorizedEnginePerformance:
-    """Benchmark asserting vectorized ASOF join runs in < 100ms on 1000+ observations."""
+    """Benchmark asserting the vectorized ASOF join stays vectorized at scale.
+
+    Scale and budget are both measured, not assumed. `benchmarks/scale_probe.py`
+    reports median wall-clock for the join on this machine:
+
+        observations   median
+              1,500     3.1 ms
+              6,000     3.0 ms
+             12,000     3.8 ms
+             30,000     6.1 ms
+
+    That is roughly linear in observations with a large constant floor, which is
+    the shape a vectorized join should have -- a per-row Python loop would be
+    30,000x worse. The budget below is set at 250ms for 30,000 observations,
+    about 40x the measured median. The headroom is deliberate: a wall-clock
+    assertion on shared CI runners needs to fail on a real algorithmic
+    regression, not on a busy machine. It still pins down the property that
+    matters, since an accidental loop would blow past it by orders of magnitude.
+    """
+
+    NUM_TICKERS = 20
+    OBS_PER_TICKER = 1500
+    BARS_PER_TICKER = 2000
+    TOTAL_OBS = NUM_TICKERS * OBS_PER_TICKER
+    BUDGET_MS = 250.0
 
     @pytest.mark.benchmark
-    def test_benchmark_1000_observations_sub_100ms(self) -> None:
-        num_tickers = 5
-        num_obs_per_ticker = 300  # 1,500 total observations
-        sec_ids = [f"SEC_{i:03d}" for i in range(num_tickers)]
+    def test_benchmark_30k_observations(self) -> None:
+        sec_ids = [f"SEC_{i:03d}" for i in range(self.NUM_TICKERS)]
 
         base_date = datetime(2022, 1, 1, 21, 0, tzinfo=UTC)
 
-        # Build feature price table (1,000 daily bars per ticker = 5,000 rows)
+        # Build feature price table (2,000 daily bars per ticker = 40,000 rows)
         feature_rows: list[dict[str, Any]] = []
         for sec in sec_ids:
-            for day in range(1000):
+            for day in range(self.BARS_PER_TICKER):
                 feature_rows.append(
                     {
                         "sec_id": sec,
@@ -554,10 +576,10 @@ class TestVectorizedEnginePerformance:
                 )
         feature_df = pl.DataFrame(feature_rows)
 
-        # Build observation matrix (1,500 observation queries)
+        # Build observation matrix (30,000 observation queries)
         obs_rows: list[dict[str, Any]] = []
         for sec in sec_ids:
-            for i in range(num_obs_per_ticker):
+            for i in range(self.OBS_PER_TICKER):
                 obs_rows.append(
                     {
                         "sec_id": sec,
@@ -566,19 +588,22 @@ class TestVectorizedEnginePerformance:
                 )
         entity_df = pl.DataFrame(obs_rows)
 
-        assert entity_df.height == 1500
+        assert entity_df.height == self.TOTAL_OBS
 
         # Execute and benchmark
         start_time = time.perf_counter()
         joined = join_features_as_of(entity_df, [feature_df])
         duration_ms = (time.perf_counter() - start_time) * 1000
 
-        assert joined.height == 1500
+        assert joined.height == self.TOTAL_OBS
         assert "close" in joined.columns
         assert joined["close"].null_count() == 0
 
-        # Performance Assertion: must execute in under 100ms
-        assert duration_ms < 100.0, f"Engine exceeded 100ms latency budget: {duration_ms:.2f}ms"
+        assert duration_ms < self.BUDGET_MS, (
+            f"Engine exceeded latency budget: {duration_ms:.2f}ms for "
+            f"{self.TOTAL_OBS} observations (budget {self.BUDGET_MS}ms, "
+            f"measured median ~6ms -- see benchmarks/scale_probe.py)"
+        )
 
 
 # =============================================================================

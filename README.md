@@ -125,17 +125,37 @@ The canary suite consists of 16 tests across 8 files:
 - `canary_07_synthetic_demo_sanity`: Six tests over the synthetic demo asserting that the leaky arm out-returns and out-Sharpes the corrected arm, that removing the injected leak makes the two arms identical, and that the reported Sharpe stays within a plausible range.
 - `test_harness_self_test`: Three tests asserting that deliberate lookahead patterns injected into the test harness trigger canary failures.
 
-### Development Trade-Offs and Bug Fixes
+### Design Trade-Offs
 
-1. Vendor Pre-Adjusted Feeds vs. the Raw Price Contract: Yahoo Finance's public API (`yfinance`) returns OHLCV that is already split-adjusted across its *entire* history, so a bar dated before a later split arrives pre-scaled by that split. Stored under a table named "raw", that is look-ahead: the 2022-08-25 TSLA 3:1 split would be visible in a 2020-08-28 price. Ingestion now inverts the vendor adjustment: `_undo_full_history_split_adjustment` scales each bar by the product of split ratios whose ex-date is strictly after that bar's trade date, using the full split history (including splits after the requested window). Volume is left untouched because it is reported as-traded. Verified against ground truth: AAPL 2020-01-02 is stored at $300.35 (75.0875 × 4) and 2020-08-28 at $499.23, so a 2020 level no longer reflects the later 2020-08-31 or 2022-08-25 splits, and real-data runs feed the CAF matrix true as-traded levels.
-2. Windows Console Encoding: Running CLI commands on Windows PowerShell produced `UnicodeEncodeError` when attempting to write UTF-8 checkmarks (`✓`) to legacy `cp1252` stdout streams. Fixed by reconfiguring `sys.stdout` to UTF-8 with character replacement fallbacks in `verify_manifest.py` and `seed_week1.py`.
-3. Mypy Strict Type Overrides: Third-party imports (`reportlab`, `matplotlib`) lacked inline type stubs, causing `mypy ledger` to fail in strict mode. Fixed by configuring explicit module overrides in `pyproject.toml`.
+Two constraints shape most of the implementation, and both are load-bearing
+for the integrity guarantees above.
+
+**As-traded prices vs. vendor convenience.** Yahoo Finance's public API
+(`yfinance`) returns OHLCV already split-adjusted across its *entire* history,
+so a bar dated before a later split arrives pre-scaled by that split. Stored
+under a table named "raw", that is look-ahead: the 2022-08-25 TSLA 3:1 split
+would be visible in a 2020-08-28 price. Ingestion inverts the vendor adjustment
+via `_undo_full_history_split_adjustment`, scaling each bar by the product of
+split ratios whose ex-date is strictly after that bar's trade date, using the
+full split history including splits after the requested window. Volume is left
+untouched because it is reported as-traded. Ground truth: AAPL 2020-01-02 is
+stored at $300.35 (75.0875 × 4) and 2020-08-28 at $499.23, so a 2020 level no
+longer reflects the later 2020-08-31 or 2022-08-25 splits, and real-data runs
+feed the CAF matrix true as-traded levels.
+
+**Untyped third-party imports.** `reportlab` and `matplotlib` ship no inline
+type stubs, so `mypy .` fails in strict mode on the report generator. The
+project configures explicit module overrides in `pyproject.toml` rather than
+weakening the strictness applied to Ledger's own code.
+
+Development history and the full list of fixes live in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Supplementary Tools and Artifacts
 
-### Cryptographic Manifest Verification
+### Hash Manifest Verification
 
-Each backtest run generates a `manifest.json` recording SHA-256 hashes of input Parquet partitions, feature definitions, the environment lockfile (`requirements.txt`), and the Git commit SHA, alongside a machine-readable `metrics.json` of the comparison results.
+Each backtest run generates a `manifest.json` recording SHA-256 hashes of input Parquet partitions, feature definitions, the environment lockfile (`requirements.txt`), and the Git commit SHA, alongside a machine-readable `metrics.json` of the comparison results. The digests are unsigned, so this establishes reproducibility against the recorded inputs rather than authenticating the run's author.
 
 Locate past run IDs:
 ```powershell

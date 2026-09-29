@@ -28,7 +28,7 @@ We must define a deterministic, conservative convention for corporate action tim
 
 ## 2. Decision
 
-> **For corporate actions ingested from public daily feeds without SEC filing timestamps, we mandate: `announcement_date = ex_date` and `known_from = ex_date session close + 15 min buffer` (16:15 EST / EDT converted to UTC).**
+> **For corporate actions ingested from public daily feeds without SEC filing timestamps, we mandate: `announcement_date = ex_date` and `known_from = ex_date session close + 15 min buffer` (16:15 ET converted to UTC).**
 
 ### Key Invariants
 
