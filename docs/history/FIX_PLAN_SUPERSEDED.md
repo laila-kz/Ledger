@@ -37,7 +37,32 @@ However, before public release and technical interview presentation, several con
 | 🔴 **Critical** | `mypy` strict mode failure: `Statement is unreachable [unreachable]` at line 140. | `ledger/lineage/manifest.py:140` | `registry.get(name)` raises `FeatureNotFoundError` rather than returning `None`. `if definition is None:` is dead code and fails strict type checking. | Catch `FeatureNotFoundError` or check `if not registry.has(name):` before retrieving. | **✅ Verified Fixed** |
 | 🔴 **Critical** | `ruff check` failure: `f-string without any placeholders [F541]` at line 143. | `ledger/lineage/manifest.py:143` | Violates repository linter rules, causing GitHub Actions CI pipeline to fail. | Remove the extraneous `f` prefix: `"Feature not found in registry"`. | **✅ Verified Fixed** |
 | 🔴 **Critical** | `ruff format --check` failure: 2 files unformatted (`verify_manifest.py`, `test_manifest.py`). | `ledger/commands/verify_manifest.py`, `tests/unit/test_manifest.py` | CI enforces `ruff format --check .`; PRs will fail the automated build. | Run `ruff format .` to align with the repository standard. | **✅ Verified Fixed** |
-| 🟡 **Medium** | Polars `UserWarning: Sortedness of columns cannot be checked when 'by' groups provided` (27 occurrences in test suite). | `ledger/features/engine.py:310`, `tests/canaries/conftest.py:250`, `pyproject.toml` | Emits noisy warning traces across all test executions and CLI runs. | Added filter rule in `pyproject.toml` for known Polars group-sortedness warning. | **✅ Verified Fixed** |
+| 🟡 **Medium** | Polars `UserWarning: Sortedness of columns cannot be checked when 'by' groups provided`. | `ledger/features/engine.py:310` | Emits a warning on every `join_asof` call. | Suppressed under pytest via a `filterwarnings` rule in `pyproject.toml`. | **⚠️ Partially fixed** — see note below. |
+
+> **On the Polars sortedness warning.** An earlier revision of this table marked
+> this "✅ Verified Fixed". That was wrong, and worth being precise about
+> because the fix only addresses half the problem.
+>
+> `pyproject.toml` carries
+> `ignore:Sortedness of columns cannot be checked when 'by' groups provided:UserWarning`
+> under `[tool.pytest.ini_options].filterwarnings`. That is pytest
+> configuration, so it applies **only when pytest is the process reading it**.
+> Verified:
+>
+> - `pytest tests/canaries/test_canary_01_restatements.py -q` → no warning
+> - `python benchmarks/scale_probe.py` → `UserWarning: Sortedness of columns
+>   cannot be checked when 'by' groups provided` at `engine.py:310`
+>
+> Any CLI invocation, script, or notebook that reaches `join_features_as_of()`
+> still prints the warning, because nothing in the library itself suppresses it.
+> The original row's claim that it was fixed "across all test executions and
+> CLI runs" was false on the second half.
+>
+> A real fix is one of: assert sortedness explicitly before joining and let
+> Polars skip its check; sort the `by` keys in `join_features_as_of`; or move
+> the suppression into library code rather than test config. None are done.
+> Until then the warning is cosmetic, not a correctness problem, and it is not
+> evidence that anything is unverified.
 
 ---
 

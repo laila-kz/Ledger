@@ -44,22 +44,22 @@ Verify that all linters, strict type checkers, unit tests, and property fuzzing 
 .\.venv\Scripts\ruff check .
 
 # 2. Check strict type safety
-.\.venv\Scripts\mypy ledger
+.\.venv\Scripts\mypy .
 
-# 3. Run full test suite (215 unit, canary, & hypothesis property tests)
+# 3. Run full test suite (226 unit, canary, & hypothesis property tests)
 .\.venv\Scripts\pytest
 ```
 
 **Expected Result:**
 - `ruff check`: `All checks passed!`
-- `mypy`: `Success: no issues found in 40 source files`
-- `pytest`: `215 passed, 1 deselected`
+- `mypy`: `Success: no issues found in 88 source files`
+- `pytest`: `226 passed, 1 deselected`
 
 ---
 
 ## Phase 2: Complete End-to-End Workflow Execution
 
-Follow these 7 sequential steps to run the complete data engineering pipeline from raw data ingestion to formal TLA+ verification and cryptographic lineage check.
+Follow these 7 sequential steps to run the complete data engineering pipeline from raw data ingestion to formal TLA+ verification and hash lineage check.
 
 ```mermaid
 flowchart TD
@@ -187,7 +187,7 @@ Get-Content docs/formal/tlc_run_log.txt
 
 ---
 
-### Step 6: Verify Cryptographic Lineage Manifest
+### Step 6: Verify Hash Lineage Manifest
 Validate the reproducibility and integrity of the generated run manifest against repository source files.
 
 > 💡 **How to find your Run ID if terminal history was cleared:**
@@ -240,7 +240,7 @@ docker compose run --rm comparison
 
 Use this minute-by-minute transcript and visual guide when recording or presenting your demo video.
 
-> 📽️ **Recorded Video Asset:** [`docs/screenshots/Start-to-End-Demo-Run.mp4`](docs/screenshots/Start-to-End-Demo-Run.mp4)
+> 📽️ **Recorded Video Asset:** not in the repository. `docs/screenshots/Start-to-End-Demo-Run.mp4` is excluded by the `*.mp4` rule in `.gitignore`, because a demo recording is a few tens of MB of binary that changes on every take. Record it fresh from this transcript; the only tracked images in that directory are `Report-1.png` and `Report-2.png`.
 
 | Page 1: Institutional Performance Tear-Sheet | Page 2: Formal Verification & Lineage Certificate |
 |:-------------------------------------------:|:-------------------------------------------------:|
@@ -292,10 +292,10 @@ Use this minute-by-minute transcript and visual guide when recording or presenti
 
 ---
 
-#### ⏱️ **5:15 - 5:45 | Cryptographic Lineage Manifest**
+#### ⏱️ **5:15 - 5:45 | Hash Lineage Manifest**
 * **Visual:** Run `ledger verify-manifest artifacts/runs/<RUN_ID>/manifest.json`.
 * **Narration:**
-  > "Every backtest automatically generates a cryptographic `manifest.json` recording SHA-256 digests of all raw input partitions, feature AST definitions, and locked dependencies. Running `ledger verify-manifest` guarantees complete production auditability and zero-copy reproducibility."
+  > "Every backtest automatically generates a `manifest.json` recording SHA-256 digests of all raw input partitions, feature AST definitions, and locked dependencies. Running `ledger verify-manifest` confirms the run was produced by exactly these inputs, so any drift in code, config, or data shows up as a mismatch instead of a quietly different result."
 
 ---
 

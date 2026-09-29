@@ -26,11 +26,11 @@ That affected every security on every day, and it -- not any real leak -- was
 producing the headline divergence.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 
 import polars as pl
 
-from ledger.backtest.runner import run_comparison
+from ledger.backtest.runner import ComparisonResult, run_comparison
 from ledger.backtest.simulation import SimulationConfig
 from ledger.backtest.strategy import StrategyConfig
 from ledger.backtest.synthetic import (
@@ -56,7 +56,7 @@ SEC_IDS = (
 )
 
 
-def _observations(raw: pl.DataFrame, observation_time) -> pl.DataFrame:
+def _observations(raw: pl.DataFrame, observation_time: time) -> pl.DataFrame:
     dates = raw.select("trade_date").unique().sort("trade_date")["trade_date"].to_list()
     stamps = [datetime.combine(d, observation_time, tzinfo=UTC) for d in dates]
     return pl.DataFrame(
@@ -67,7 +67,7 @@ def _observations(raw: pl.DataFrame, observation_time) -> pl.DataFrame:
     )
 
 
-def _compare(observation_time):
+def _compare(observation_time: time) -> ComparisonResult:
     raw, preadj, splits, _fundamentals = generate_synthetic_data(SEC_IDS, START, END)
     return run_comparison(
         observation_matrix=_observations(raw, observation_time),
@@ -80,7 +80,7 @@ def _compare(observation_time):
     )
 
 
-def test_observation_lands_after_bar_confirmation():
+def test_observation_lands_after_bar_confirmation() -> None:
     """The observation must not precede the bar's ``known_from`` stamp.
 
     Otherwise the point-in-time arm cannot see the bar it is supposed to be
@@ -93,13 +93,13 @@ def test_observation_lands_after_bar_confirmation():
     )
 
 
-def _split_facts():
+def _split_facts() -> tuple[str, date, float]:
     """Return (split security, ex_date, ratio) for the synthetic fixture."""
     _raw, _preadj, splits, _fund = generate_synthetic_data(SEC_IDS, START, END)
     return splits["sec_id"][0], splits["ex_date"][0], splits["split_ratio"][0]
 
 
-def test_arms_differ_only_by_split_basis_when_no_leak_injected():
+def test_arms_differ_only_by_split_basis_when_no_leak_injected() -> None:
     """With no leak injected, the arms must differ *only* in adjustment basis.
 
     The corrected arm reduces a split only once it is announced, so its level
@@ -147,6 +147,9 @@ def test_arms_differ_only_by_split_basis_when_no_leak_injected():
     # (1 ULP); the historical timing confound moved this by ~46.
     for feature in ("momentum_20d", "volatility_20d"):
         worst = (joined[feature] - joined[f"{feature}_corrected"]).abs().max()
+        assert isinstance(worst, float), (
+            f"{feature} difference must be a float, got {type(worst).__name__}"
+        )
         assert worst <= MAX_ECONOMIC_FEATURE_DISAGREEMENT, (
             f"{feature} differs by up to {worst} across arms with no leak injected. "
             "Economic features are split-corrected and must be basis-independent; "
@@ -165,6 +168,9 @@ def test_arms_differ_only_by_split_basis_when_no_leak_injected():
     )
     if unadjusted.height:
         worst_ratio_error = (unadjusted["_level_ratio"] - ratio).abs().max()
+        assert isinstance(worst_ratio_error, float), (
+            f"level-ratio error must be a float, got {type(worst_ratio_error).__name__}"
+        )
         assert worst_ratio_error < 1e-9, (
             f"Level ratio between arms departs from the split ratio {ratio} by "
             f"{worst_ratio_error}. The arms must differ by exactly one corporate "
@@ -172,7 +178,7 @@ def test_arms_differ_only_by_split_basis_when_no_leak_injected():
         )
 
 
-def test_arms_agree_on_weights_when_no_leak_injected():
+def test_arms_agree_on_weights_when_no_leak_injected() -> None:
     """With no leak injected, target weights must be identical across arms."""
     comparison = _compare(OBSERVATION_TIME)
     leaky = comparison.leaky.weights.sort(["observation_timestamp", "sec_id"])
@@ -187,7 +193,7 @@ def test_arms_agree_on_weights_when_no_leak_injected():
     )
 
 
-def test_pre_confirmation_observation_is_detected_as_confound():
+def test_pre_confirmation_observation_is_detected_as_confound() -> None:
     """Pin the historical defect: a pre-confirmation observation *is* a confound.
 
     This test deliberately regresses the observation timestamp to before the bar

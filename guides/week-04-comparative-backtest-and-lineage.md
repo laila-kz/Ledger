@@ -49,7 +49,7 @@
 
 ### Day 4: Hash-Verified Lineage & Run Manifest
 1. **Implement `ledger/lineage/manifest.py`:**
-   - Calculate cryptographic SHA-256 hashes of:
+   - Calculate SHA-256 hashes of:
      - All input raw Parquet datasets (`fact_market_ohlcv_raw.parquet`, `fact_corporate_actions.parquet`).
      - Declarative feature definition files.
      - Project lockfile (`poetry.lock` / `uv.lock` / `requirements.txt`).

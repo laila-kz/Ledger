@@ -39,8 +39,8 @@
 2. **Implement `ledger/core/calendars.py`:**
    - Wrap `exchange_calendars` for `XNYS` (NYSE).
    - Implement `get_actionable_timestamp(event_time, is_market_data)`:
-     - EOD bars at 16:00 EST $\to$ actionable at 16:15 EST.
-     - Filings after 16:00 EST or on weekends $\to$ actionable at next trading session 09:30 EST open.
+     - EOD bars at 16:00 ET $\to$ actionable at 16:15 ET.
+     - Filings after 16:00 ET or on weekends $\to$ actionable at next trading session 09:30 ET open.
 
 ### Day 3: Entity Resolution & Permanent Identifiers
 1. **Implement `ledger/core/entity.py`:**

@@ -49,7 +49,7 @@ from datetime import date
 import polars as pl
 
 from ledger.backtest.run_comparison import _build_observations, _generate_synthetic_data
-from ledger.backtest.runner import run_comparison
+from ledger.backtest.runner import ComparisonResult, run_comparison
 from ledger.backtest.simulation import SimulationConfig
 from ledger.backtest.strategy import StrategyConfig
 
@@ -69,7 +69,9 @@ MAX_ABS_DAILY_RETURN = 0.20
 MAX_ARM_RETURN_DISAGREEMENT = 1e-6
 
 
-def _run(sec_ids: tuple[str, ...] = SEC_IDS) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+def _run(
+    sec_ids: tuple[str, ...] = SEC_IDS,
+) -> tuple[ComparisonResult, pl.DataFrame, pl.DataFrame]:
     raw, preadjusted, splits, _fundamentals = _generate_synthetic_data(
         sec_ids, START_DATE, END_DATE
     )

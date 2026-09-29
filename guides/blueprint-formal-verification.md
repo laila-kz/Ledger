@@ -56,7 +56,7 @@ docs/
 │   ├── tlc_run_log.txt           # Captured output: states explored, invariants held
 │   └── README.md                 # How to install TLA+ tools & re-run the model check
 ├── adr/
-│   └── 0005-formal-verification-of-bitemporal-invariants.md   # NEW ADR
+│   └── 021-formal-verification-of-bitemporal-invariants.md   # NEW ADR
 
 tests/
 ├── canaries/                   # UNCHANGED — the 10 existing scenario tests
@@ -266,7 +266,7 @@ Two different cadences, deliberately:
 - [ ] `docs/formal/README.md` — one page: what's specified, how to install TLA+ tooling, how to re-run
 - [ ] `tests/property/conftest.py` + `test_bitemporal_invariants.py` — the six Hypothesis properties
 - [ ] CI step running the property tests on every push
-- [ ] **`docs/adr/0005-formal-verification-of-bitemporal-invariants.md`** — new ADR explaining *why* TLA+ + property testing rather than just more example-based canaries (mirrors the structure of your existing ADR-0001 through 0004)
+- [ ] **`docs/adr/021-formal-verification-of-bitemporal-invariants.md`** — new ADR explaining *why* TLA+ + property testing rather than just more example-based canaries (mirrors the structure of your existing ADR-017 through 020)
 - [ ] README addition: a short "Formal Verification" section (mirroring the existing "Developer Tooling" section's style) pointing to the ADR and the `docs/formal/` directory
 - [ ] If TLC or Hypothesis finds a real violation: a short writeup of the bug, the fix, and the before/after — this is your best single interview artifact from the whole exercise
 
@@ -281,7 +281,7 @@ Two different cadences, deliberately:
 | **3** | Add `Monotonic`, `ValidBeforeKnown`, `NoGaps` invariants. Run TLC with increasing bounds; capture the log. Investigate and document any counterexamples. |
 | **4** | Write the Hypothesis strategies and the four core property tests against the real `ledger/core/bitemporal.py`. Wire into CI. |
 | **5** | If time allows: `RuleBasedStateMachine` stateful extension modeling interleaved ingest/query sequences. |
-| **6** | Write ADR-0005, the `docs/formal/README.md`, and the README section. Rehearse explaining the TLA+ spec and the Hypothesis results out loud — this module lives or dies on how well you can defend it verbally in an interview, not on the code alone. |
+| **6** | Write ADR-021, the `docs/formal/README.md`, and the README section. Rehearse explaining the TLA+ spec and the Hypothesis results out loud — this module lives or dies on how well you can defend it verbally in an interview, not on the code alone. |
 
 ---
 

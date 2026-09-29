@@ -68,7 +68,9 @@ Manifest: artifacts/runs/638e1937b1d9db50/manifest.json
 ```
 
 Note on Synthetic Generator Properties:
-The synthetic dataset generator (`generate_synthetic_data` in `ledger/backtest/synthetic.py`) builds a deterministic, seeded geometric-Brownian-motion price path (Itô-corrected drift) with a single 4:1 forward split at the date midpoint, emitted three ways: true as-traded OHLCV, a vendor pre-adjusted close series that already reflects every future split, and the split record. The leaky pipeline reads the pre-adjusted close while ignoring the split factor, so it double-counts the split: the unadjusted 4x level jump inflates cumulative return (+46.64% vs +30.70%) and the Sharpe ratio (+0.56 vs +0.42) against a realistic, non-zero market drawdown. The point-in-time pipeline instead reconstructs as-traded levels on ingest and applies the CAF matrix across the split boundary, so both arms observe the same economic price path and the only difference is the leak. Because the generator is seeded, these figures reproduce on every run; the run ID varies per invocation.
+The synthetic dataset generator (`generate_synthetic_data` in `ledger/backtest/synthetic.py`) builds a deterministic, seeded geometric-Brownian-motion price path (Itô-corrected drift) with a single 4:1 forward split at the date midpoint, emitted three ways: true as-traded OHLCV, a vendor pre-adjusted close series that already reflects every future split, and the split record. Pre-split closes are 4x the post-split economic level, so the as-traded series steps *down* by 4x at the midpoint while the pre-adjusted series is smooth across it.
+
+The leaky pipeline reads the pre-adjusted close and ignores the split factor entirely, so it never sees that level change. The point-in-time pipeline reconstructs as-traded levels on ingest and applies the CAF matrix across the split boundary, dividing out the 4:1 ratio. The leaky arm therefore trades on a return series that disagrees with the real one about what happened at the split, which inflates cumulative return (+46.64% vs +30.70%) and Sharpe (+0.56 vs +0.42) while leaving max drawdown at -28.29% in both arms — the leak makes the strategy look better, not merely different. Because the generator is seeded, these figures reproduce on every run; the run ID varies per invocation.
 
 ### Static AST Leakage Detection
 
@@ -96,7 +98,7 @@ pytest
 
 Captured output:
 ```text
-===================== 215 passed, 1 deselected in 25.99s ======================
+===================== 226 passed, 1 deselected in 54.69s ======================
 ```
 
 Note on Deselected Test:
@@ -112,7 +114,7 @@ ledger canaries
 
 Captured output:
 ```text
-============================= 16 passed in 2.49s ==============================
+============================= 16 passed in 3.80s ==============================
 ```
 
 The canary suite consists of 16 tests across 8 files:
@@ -122,20 +124,42 @@ The canary suite consists of 16 tests across 8 files:
 - `canary_04_survivorship_universe`: Verifies that delisted entities remain visible in historical universe queries prior to delisting.
 - `canary_05_filing_lag_window`: Verifies that fiscal quarter fundamentals are hidden during the lag period before public release.
 - `canary_06_ticker_relabeling`: Verifies continuous identity tracking when ticker symbols change (e.g. FB to META).
-- `canary_07_synthetic_demo_sanity`: Six tests over the synthetic demo asserting that the leaky arm out-returns and out-Sharpes the corrected arm, that removing the injected leak makes the two arms identical, and that the reported Sharpe stays within a plausible range.
+- `canary_07_synthetic_demo_sanity`: Six tests over the synthetic demo asserting that the leaky arm out-returns and out-Sharpes the corrected arm, that removing the injected leak makes the two arms identical, that the reported Sharpe stays within a plausible range, and that the corrected Sharpe remains positive.
 - `test_harness_self_test`: Three tests asserting that deliberate lookahead patterns injected into the test harness trigger canary failures.
 
-### Development Trade-Offs and Bug Fixes
+Every test name, count, and figure in this repository is recorded with its verification method in [docs/CLAIMS.md](docs/CLAIMS.md). A claim may only appear here if it has a row there.
 
-1. Vendor Pre-Adjusted Feeds vs. the Raw Price Contract: Yahoo Finance's public API (`yfinance`) returns OHLCV that is already split-adjusted across its *entire* history, so a bar dated before a later split arrives pre-scaled by that split. Stored under a table named "raw", that is look-ahead: the 2022-08-25 TSLA 3:1 split would be visible in a 2020-08-28 price. Ingestion now inverts the vendor adjustment: `_undo_full_history_split_adjustment` scales each bar by the product of split ratios whose ex-date is strictly after that bar's trade date, using the full split history (including splits after the requested window). Volume is left untouched because it is reported as-traded. Verified against ground truth: AAPL 2020-01-02 is stored at $300.35 (75.0875 × 4) and 2020-08-28 at $499.23, so a 2020 level no longer reflects the later 2020-08-31 or 2022-08-25 splits, and real-data runs feed the CAF matrix true as-traded levels.
-2. Windows Console Encoding: Running CLI commands on Windows PowerShell produced `UnicodeEncodeError` when attempting to write UTF-8 checkmarks (`✓`) to legacy `cp1252` stdout streams. Fixed by reconfiguring `sys.stdout` to UTF-8 with character replacement fallbacks in `verify_manifest.py` and `seed_week1.py`.
-3. Mypy Strict Type Overrides: Third-party imports (`reportlab`, `matplotlib`) lacked inline type stubs, causing `mypy ledger` to fail in strict mode. Fixed by configuring explicit module overrides in `pyproject.toml`.
+### Design Trade-Offs
+
+Two constraints shape most of the implementation, and both are load-bearing
+for the integrity guarantees above.
+
+**As-traded prices vs. vendor convenience.** Yahoo Finance's public API
+(`yfinance`) returns OHLCV already split-adjusted across its *entire* history,
+so a bar dated before a later split arrives pre-scaled by that split. Stored
+under a table named "raw", that is look-ahead: the 2022-08-25 TSLA 3:1 split
+would be visible in a 2020-08-28 price. Ingestion inverts the vendor adjustment
+via `_undo_full_history_split_adjustment`, scaling each bar by the product of
+split ratios whose ex-date is strictly after that bar's trade date, using the
+full split history including splits after the requested window. Volume is left
+untouched because it is reported as-traded. Ground truth: AAPL 2020-01-02 is
+stored at $300.35 (75.0875 × 4) and 2020-08-28 at $499.23, so a 2020 level no
+longer reflects the later 2020-08-31 or 2022-08-25 splits, and real-data runs
+feed the CAF matrix true as-traded levels.
+
+**Untyped third-party imports.** `reportlab` and `matplotlib` ship no inline
+type stubs, so `mypy .` fails in strict mode on the report generator. The
+project configures explicit module overrides in `pyproject.toml` rather than
+weakening the strictness applied to Ledger's own code.
+
+Development history and the full list of fixes live in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Supplementary Tools and Artifacts
 
-### Cryptographic Manifest Verification
+### Hash Manifest Verification
 
-Each backtest run generates a `manifest.json` recording SHA-256 hashes of input Parquet partitions, feature definitions, the environment lockfile (`requirements.txt`), and the Git commit SHA, alongside a machine-readable `metrics.json` of the comparison results.
+Each backtest run generates a `manifest.json` recording SHA-256 hashes of input Parquet partitions, feature definitions, the environment lockfile (`requirements.txt`), and the Git commit SHA, alongside a machine-readable `metrics.json` of the comparison results. The digests are unsigned, so this establishes reproducibility against the recorded inputs rather than authenticating the run's author.
 
 Locate past run IDs:
 ```powershell

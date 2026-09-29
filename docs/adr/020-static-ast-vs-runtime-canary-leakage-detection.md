@@ -1,4 +1,4 @@
-# ADR-0004: Dual-Layer Temporal Safety — Static AST Linting vs. Dynamic Runtime Canaries
+# ADR-020: Dual-Layer Temporal Safety — Static AST Linting vs. Dynamic Runtime Canaries
 
 * **Status:** Accepted
 * **Date:** 2026-09-14

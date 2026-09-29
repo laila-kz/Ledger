@@ -2,7 +2,7 @@
 
 Critical Invariants:
 1. Splits and dividends are stored as distinct append-only fact records.
-2. `known_from` convention: Defaults to `ex_date` session close + 15 min buffer (16:15 EST),
+2. `known_from` convention: Defaults to `ex_date` session close + 15 min buffer (16:15 ET),
    ensuring backtest strategies cannot consume split/dividend knowledge before market execution.
 3. Monotonic sequence and yearly Hive Parquet partitioning (/year=YYYY/).
 """

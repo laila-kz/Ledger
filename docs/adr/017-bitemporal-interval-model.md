@@ -1,4 +1,4 @@
-# ADR-0001: Bitemporal Interval Model with Append-Only Derived Bounds
+# ADR-017: Bitemporal Interval Model with Append-Only Derived Bounds
 
 * **Status:** Accepted
 * **Date:** 2026-09-14

@@ -1,4 +1,4 @@
-# ADR-0005: Formal Verification of Bitemporal Invariants (TLA+ & Property-Based Testing)
+# ADR-021: Formal Verification of Bitemporal Invariants (TLA+ & Property-Based Testing)
 
 - **Status:** Accepted
 - **Date:** September 2026

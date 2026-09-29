@@ -12,8 +12,8 @@
 
 Quantitative backtests suffer severe look-ahead leakage when timestamps are treated as abstract continuous numbers rather than realistic, actionable events subject to real-world market operating hours and data dissemination delays:
 
-1. **Timezone Ambiguity & DST Jumps:** Raw financial data sources mix timestamps across timezones (e.g., SEC EDGAR filings timestamped in UTC or US Eastern, EOD daily bars labeled by calendar date, macroeconomic releases in Washington D.C. local time). Naive timestamps lead to 4-to-5 hour leakage or lag during Daylight Saving Time (EST vs. EDT) transitions.
-2. **Instantaneous Ingestion Illusion:** An earnings report filed on Friday at 17:30 EST cannot be traded on Friday at 15:59 EST before the market close. A model that consumes the Friday filing during the Friday close rebalance introduces massive look-ahead bias.
+1. **Timezone Ambiguity & DST Jumps:** Raw financial data sources mix timestamps across timezones (e.g., SEC EDGAR filings timestamped in UTC or US Eastern, EOD daily bars labeled by calendar date, macroeconomic releases in Washington D.C. local time). Naive timestamps lead to 4-to-5 hour leakage or lag during the Eastern daylight/standard transitions (EDT vs. EST).
+2. **Instantaneous Ingestion Illusion:** An earnings report filed on Friday at 17:30 ET cannot be traded on Friday at 15:59 ET before the market close. A model that consumes the Friday filing during the Friday close rebalance introduces massive look-ahead bias.
 3. **End-of-Day Bar Consolidation Delay:** Daily OHLCV bars do not become actionable the millisecond the 16:00:00 closing cross occurs. Auction closing, tape consolidation, and vendor feeds require post-market processing before features are available.
 
 We require an explicit, system-wide convention for timezone normalization, interval boundary semantics, and actionable knowledge time resolution.
@@ -37,13 +37,13 @@ We require an explicit, system-wide convention for timezone normalization, inter
 
 3. **Actionable Timestamp Rules (`get_actionable_timestamp`):**
    * **EOD Market Data (`is_market_data=True`):**
-     * Daily price bars for session date $D$ close at 16:00 EST (or 13:00 on early-close sessions like Black Friday).
-     * Actionable timestamp is computed as `session_close + 15 minutes` (16:15 EST / 13:15 EST).
+     * Daily price bars for session date $D$ close at 16:00 ET (or 13:00 on early-close sessions like Black Friday).
+     * Actionable timestamp is computed as `session_close + 15 minutes` (16:15 ET / 13:15 ET).
    * **Fundamental Filings & Reports (`is_market_data=False`):**
-     * **In-Session (09:30 $\le T_{event} < 16:00$ EST on a trading day):** Actionable immediately at $T_{event}$.
-     * **After-Hours ($T_{event} \ge 16:00$ EST):** Actionable at the next trading session open (**09:30 EST**).
-     * **Pre-Market ($T_{event} < 09:30$ EST):** Actionable at today's market open (**09:30 EST**).
-     * **Weekend / Exchange Holiday:** Actionable at the next trading session open (**09:30 EST**).
+     * **In-Session (09:30 $\le T_{event} < 16:00$ ET on a trading day):** Actionable immediately at $T_{event}$.
+     * **After-Hours ($T_{event} \ge 16:00$ ET):** Actionable at the next trading session open (**09:30 ET**).
+     * **Pre-Market ($T_{event} < 09:30$ ET):** Actionable at today's market open (**09:30 ET**).
+     * **Weekend / Exchange Holiday:** Actionable at the next trading session open (**09:30 ET**).
 
 ---
 
@@ -51,7 +51,7 @@ We require an explicit, system-wide convention for timezone normalization, inter
 
 ### Positive (Gains & Guarantees)
 * **Elimination of After-Hours Look-Ahead (Canary 03 Protection):** Friday evening earnings releases can never be accidentally consumed by a Friday 15:59 rebalance strategy.
-* **Deterministic DST Handling:** Daylight Saving Time shifts (EST $\leftrightarrow$ EDT) are handled through `exchange_calendars` and `zoneinfo.ZoneInfo("America/New_York")`, avoiding 1-hour time warp defects.
+* **Deterministic DST Handling:** Daylight Saving Time shifts (EDT $\leftrightarrow$ EST) are handled through `exchange_calendars` and `zoneinfo.ZoneInfo("America/New_York")`, avoiding 1-hour time warp defects.
 * **Mathematical Interval Partitioning:** Half-open intervals ensure non-overlapping partitions during vectorized joins.
 
 ### Negative & Trade-offs (Liabilities & Mitigations)

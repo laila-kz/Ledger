@@ -12,7 +12,7 @@
 
 In quantitative trading feature stores, financial data contains two orthogonal temporal dimensions:
 1. **Valid Time (Market Reality):** When an economic fact occurred in the real world (e.g. fiscal quarter ended June 30).
-2. **Transaction Time (Knowledge Time):** When that fact was recorded and became actionable to the trading system (e.g. 10-Q filed and accepted on SEC EDGAR on August 8 at 17:30 EST).
+2. **Transaction Time (Knowledge Time):** When that fact was recorded and became actionable to the trading system (e.g. 10-Q filed and accepted on SEC EDGAR on August 8 at 17:30 ET).
 
 When restatements, retroactive amendments, or ticker renames occur, standard data warehousing approaches mutate existing records (e.g. updating a row's `is_current = FALSE` and writing a new row, or updating a physical `known_to` timestamp column). 
 

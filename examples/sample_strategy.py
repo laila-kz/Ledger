@@ -11,7 +11,7 @@ import pandas as pd
 
 def compute_compliant_features(df: pd.DataFrame) -> pd.DataFrame:
     """Compliant feature engineering using causal rolling windows and positive shifts."""
-    out = df.copy()
+    out: pd.DataFrame = df.copy()
 
     # Rule 1 compliant: Positive shift (lagging data backwards into the past)
     out["prev_close"] = out["close"].shift(1)
@@ -28,7 +28,7 @@ def compute_compliant_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def compute_leaky_features(df: pd.DataFrame) -> pd.DataFrame:
     """Leaky feature engineering containing lookahead antipatterns."""
-    out = df.copy()
+    out: pd.DataFrame = df.copy()
 
     # Rule 1 Violation: Negative shift peeks into tomorrow's price (lookahead bias)
     out["future_close"] = out["close"].shift(-1)

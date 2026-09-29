@@ -10,7 +10,7 @@ Critical Invariants:
    at or before its own date. See ADR 006 and the `raw` price-basis invariant in
    `tests/unit/test_ingestion.py`.
 2. Tickers are mapped to synthetic permanent `sec_id` (SEC_<TICKER>_001).
-3. `known_from` is computed via exchange calendar session close + 15 min buffer (16:15 EST).
+3. `known_from` is computed via exchange calendar session close + 15 min buffer (16:15 ET).
 4. Atomic Parquet writing and monotonic `ingestion_seq` audit logging.
 """
 

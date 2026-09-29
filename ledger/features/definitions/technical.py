@@ -248,7 +248,7 @@ def compute_ema_50d(ctx: FeatureContext) -> pl.DataFrame:
         Uses Polars `ewm_mean(span=50, min_samples=50, adjust=False)`. Recursion
         initiates from P_0 and nulls the first 49 bars. Differs from TA-Lib/Bloomberg
         SMA_50-initialization by < 0.4% in initial bars, decaying asymptotically to
-        zero over longer histories (documented in ADR 007).
+        zero over longer histories (documented in ADR 008).
     """
     ind = _pit_window_indicators(ctx)
     return ind.select(_IDG_COLUMNS + ["ema_50d"])

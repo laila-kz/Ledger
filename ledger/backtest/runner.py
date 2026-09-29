@@ -126,11 +126,14 @@ def run_comparison(
     isolate the leak: the only difference is the availability rule.
 
     ``raw_prices_are_preadjusted`` declares the price basis of ``raw_prices``.
-    When the supplied levels already embed every corporate action (as a vendor
-    ``Close``/``auto_adjust`` feed does, and as this repository's own seeded
-    catalog does), the ex-date ratio is already reflected in them and must not be
-    applied again, so the flag switches the split adjustment off. Leave it
-    ``False`` for genuinely unadjusted prints.
+    When the supplied levels already embed every corporate action, as a vendor
+    ``Close``/``auto_adjust`` feed does, the ex-date ratio is already reflected
+    in them and must not be applied again, so the flag switches the split
+    adjustment off. Leave it ``False`` for genuinely unadjusted prints.
+
+    This repository's own seeded catalog is as-traded, not pre-adjusted, so the
+    default is correct for it. The flag exists for callers supplying a vendor
+    series directly.
     """
     strategy = strategy_config or StrategyConfig()
     simulation = simulation_config or SimulationConfig()

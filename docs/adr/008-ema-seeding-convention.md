@@ -1,4 +1,4 @@
-# ADR 007: Exponential Moving Average (EMA) Seeding & Formulation Convention
+# ADR-008: Exponential Moving Average (EMA) Seeding & Formulation Convention
 
 ## Context
 In Quantitative Finance and Technical Analysis, Exponential Moving Averages (EMA) with span $N$ are recursive filters governed by smoothing factor:

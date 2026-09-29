@@ -21,9 +21,9 @@ UTC = timezone.utc
 def test_metric_formulas_and_guards() -> None:
     returns = [0.10, -0.05, 0.02]
     assert annualized_volatility(returns, periods_per_year=1) == pytest.approx(0.0750555, rel=1e-5)
-    assert sharpe_ratio(returns, periods_per_year=1) == pytest.approx(
-        sum(returns) / 3 / annualized_volatility(returns, 1)
-    )
+    volatility = annualized_volatility(returns, 1)
+    assert volatility is not None, "volatility of a non-degenerate series must be defined"
+    assert sharpe_ratio(returns, periods_per_year=1) == pytest.approx(sum(returns) / 3 / volatility)
     assert max_drawdown([1.1, 1.045, 1.0659]) == pytest.approx(-0.05)
     assert calmar_ratio(0.12, -0.20) == pytest.approx(0.6)
     assert win_rate(returns) == pytest.approx(2 / 3)
