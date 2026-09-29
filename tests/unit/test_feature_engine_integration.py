@@ -146,8 +146,8 @@ class TestDynamicCAFSplitAwarenessEndToEnd:
         base_dt = datetime(2020, 8, 1, 21, 0, tzinfo=UTC)
 
         # 4:1 split on 2020-08-16 (day 15)
-        # Constant economic price $100 (raw $25 pre-split, raw $100 post-split)
-        raw_closes = [25.0] * 15 + [100.0] * 20
+        # Constant economic price $100 (raw $400 pre-split, raw $100 post-split)
+        raw_closes = [400.0] * 15 + [100.0] * 20
         prices = pl.DataFrame(
             {
                 "sec_id": ["SEC_AAPL_001"] * num_days,

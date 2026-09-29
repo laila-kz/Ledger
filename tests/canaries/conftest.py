@@ -231,7 +231,9 @@ def leaky_static_adjusted_close(
     splits: pl.DataFrame,
 ) -> pl.DataFrame:
     """Deliberately apply every split retroactively, regardless of knowledge time."""
-    split_factors = splits.group_by("sec_id").agg(pl.col("split_ratio").product().alias("caf"))
+    split_factors = splits.group_by("sec_id").agg(
+        (1.0 / pl.col("split_ratio")).product().alias("caf")
+    )
     return prices.join(split_factors, on="sec_id", how="left").with_columns(
         pl.col("caf").fill_null(1.0),
         (pl.col("close") * pl.col("caf")).alias("adj_close"),

@@ -1,9 +1,10 @@
-"""One-shot seed script for Week 1 data ingestion and unadjusted price verification.
+"""One-shot seed script for Week 1 data ingestion and price-basis verification.
 
 Ingests:
 - Liquid US tickers: AAPL, MSFT, NVDA, META, GOOGL, TSLA
 - Corporate Actions: AAPL 4:1 split (2020-08-31), TSLA 5:1 split (2020-08-31), dividends
-- Verifies strictly unadjusted pricing across storage.
+- Verifies the stored price basis: yfinance 'Close', which is split-adjusted but
+  NOT dividend-adjusted. It is not raw pre-split data.
 """
 
 import contextlib
@@ -18,6 +19,14 @@ TICKERS = ["AAPL", "MSFT", "NVDA", "META", "GOOGL", "TSLA"]
 START_DATE = "2020-01-01"
 END_DATE = "2023-12-31"
 BASE_DIR = Path("data/raw")
+
+# Ledger stores yfinance 'Close': split-adjusted but NOT dividend-adjusted.
+# yfinance >= 0.2 applies split adjustments unconditionally, so the stored
+# series is NOT raw pre-split. These bounds assert the split-adjusted basis so
+# a silent provider change fails loudly instead of redefining every downstream
+# feature.
+AAPL_SPLIT_ADJUSTED_RANGE = (100.0, 200.0)  # 2020-08-28, three days pre-4:1
+TSLA_SPLIT_ADJUSTED_RANGE = (350.0, 550.0)  # 2020-08-28, three days pre-5:1
 
 
 def run_seed() -> None:
@@ -61,51 +70,63 @@ def run_seed() -> None:
     else:
         print("ℹ No corporate actions returned.")
 
-    # 3. Verification of Unadjusted Price Invariant
-    print("\n[3/3] Verifying unadjusted storage invariants...")
+    # 3. Verification of the stored price basis
+    print("\n[3/3] Verifying stored price basis...")
     catalog = LedgerCatalog(base_dir=BASE_DIR)
 
-    # Check AAPL price on 2020-08-28 (before 2020-08-31 4:1 split)
+    # Ledger stores yfinance's 'Close': split-adjusted but NOT dividend-adjusted.
+    # yfinance >= 0.2 applies split adjustments unconditionally, so the stored
+    # series is NOT raw pre-split. For AAPL on 2020-08-28 (three days before the
+    # 2020-08-31 4:1 split) the split-adjusted close is ~$125; the raw pre-split
+    # print of ~$499 is reconstructable as stored_close * split_ratio.
     aapl_res = catalog.query(
         """
-        SELECT trade_date, open, high, low, close, volume
+        SELECT close
         FROM fact_market_ohlcv_raw
         WHERE sec_id = 'SEC_AAPL_001' AND trade_date = DATE '2020-08-28'
         """
     )
     if len(aapl_res) > 0:
         aapl_close = float(aapl_res["close"][0])
-        print(f"AAPL 2020-08-28 close price in storage: ${aapl_close:.2f}")
-        # yfinance returns split-adjusted base close (~$124-$127) or pre-split (~$499-$500)
-        assert 100.0 < aapl_close < 600.0, (
-            f"ERROR: AAPL price (${aapl_close:.2f}) is outside expected historical range."
+        lo, hi = AAPL_SPLIT_ADJUSTED_RANGE
+        print(f"AAPL 2020-08-28 close in storage: ${aapl_close:.2f}")
+        if not lo < aapl_close < hi:
+            raise RuntimeError(
+                f"FATAL: AAPL close on 2020-08-28 is ${aapl_close:.2f}, outside the expected "
+                f"split-adjusted range (${lo:.0f}-${hi:.0f}). Ledger stores yfinance 'Close', "
+                "which yfinance >= 0.2 always returns split-adjusted. A value near $499 means "
+                "the feed changed to genuinely unadjusted prices; a value near $125 is correct. "
+                "Re-verify the CAF contract before ingesting into this store."
+            )
+        print(
+            f"✓ Split-adjusted basis verified. Pre-split equivalent = "
+            f"${aapl_close * 4.0:.2f} (close x 4.0)."
         )
-        pre_split_equiv = aapl_close if aapl_close > 400.0 else aapl_close * 4.0
-        print(f"Verified: AAPL pre-split price equivalent is ~${pre_split_equiv:.2f}.")
 
-    # Check TSLA price on 2020-08-28 (5:1 split on 2020-08-31, 3:1 split on 2022-08-25)
+    # TSLA split the same way: 5:1 on 2020-08-31 and 3:1 on 2022-08-25, so the
+    # 2020-08-28 split-adjusted close is ~$442 (the ~$2,213 pre-split print divided
+    # by 5). Assert the stored basis, not the historical print.
     tsla_res = catalog.query(
         """
-        SELECT trade_date, open, high, low, close
+        SELECT close
         FROM fact_market_ohlcv_raw
         WHERE sec_id = 'SEC_TSLA_001' AND trade_date = DATE '2020-08-28'
         """
     )
     if len(tsla_res) > 0:
         tsla_close = float(tsla_res["close"][0])
-        print(f"TSLA 2020-08-28 close price in storage: ${tsla_close:.2f}")
-        # yfinance returns fully split-adjusted base close (~$147),
-        # single split (~$442), or pre-split (~$2213)
-        assert 100.0 < tsla_close < 2500.0, (
-            f"ERROR: TSLA price (${tsla_close:.2f}) is outside expected historical range."
+        lo, hi = TSLA_SPLIT_ADJUSTED_RANGE
+        print(f"TSLA 2020-08-28 close in storage: ${tsla_close:.2f}")
+        if not lo < tsla_close < hi:
+            raise RuntimeError(
+                f"FATAL: TSLA close on 2020-08-28 is ${tsla_close:.2f}, outside the expected "
+                f"split-adjusted range (${lo:.0f}-${hi:.0f}). See the AAPL note above: this store "
+                "expects yfinance 'Close' (split-adjusted, not dividend-adjusted)."
+            )
+        print(
+            f"✓ Split-adjusted basis verified. Pre-split equivalent = "
+            f"${tsla_close * 5.0:.2f} (close x 5.0)."
         )
-        if tsla_close > 1800.0:
-            pre_split_equiv = tsla_close
-        elif tsla_close > 300.0:
-            pre_split_equiv = tsla_close * 5.0
-        else:
-            pre_split_equiv = tsla_close * 15.0
-        print(f"Verified: TSLA pre-split price equivalent is ~${pre_split_equiv:.2f}.")
 
     # Verify Corporate Actions split ratios
     splits_res = catalog.query(
@@ -118,7 +139,7 @@ def run_seed() -> None:
     )
     print(f"✓ Verified: {len(splits_res)} stock split events registered in storage.")
     for row in splits_res.iter_rows(named=True):
-        print(f"   - {row['sec_id']}: {row['split_ratio']}x split on {row['ex_date']}")
+        print(f"   - {row['sec_id']}: {row['split_ratio']}:1 split on {row['ex_date']}")
 
     catalog.close()
     print("\n=== [LEDGER SEED] Week 1 Data Ingestion Successfully Completed & Verified ===")

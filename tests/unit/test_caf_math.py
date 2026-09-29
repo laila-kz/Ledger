@@ -11,12 +11,12 @@ Split event under test:
     known_from: 2020-08-31 20:15:00 UTC (conservative post-close recording)
 
 CAF truth table:
-    T_obs                   | Splits in scope | CAF | adj_close (raw=500)
-    2020-07-28 20:15 UTC    | none            | 1.0 | 500.0
-    2020-08-15 20:15 UTC    | none            | 1.0 | 500.0
-    2020-08-31 15:00 UTC    | none            | 1.0 | 500.0  <- known_from guard
-    2020-08-31 21:00 UTC    | {split}         | 4.0 | 2000.0
-    2020-09-15 20:15 UTC    | {split}         | 4.0 | 2000.0
+    T_obs                   | Splits in scope | CAF  | adj_close (raw=500)
+    2020-07-28 20:15 UTC    | none            | 1.0  | 500.0
+    2020-08-15 20:15 UTC    | none            | 1.0  | 500.0
+    2020-08-31 15:00 UTC    | none            | 1.0  | 500.0  <- known_from guard
+    2020-08-31 21:00 UTC    | {split}         | 0.25 | 125.0
+    2020-09-15 20:15 UTC    | {split}         | 0.25 | 125.0
 """
 
 from __future__ import annotations
@@ -139,8 +139,8 @@ class TestComputeCAFScalar:
             f"known_from guard failed: expected CAF=1.0 at 15:00 UTC on ex_date, got {caf}"
         )
 
-    def test_ex_date_after_known_from_caf_is_four(self, splits_df: pl.DataFrame) -> None:
-        """Observation on ex_date AFTER known_from (21:00 vs 20:15 UTC) -> CAF=4.0."""
+    def test_ex_date_after_known_from_caf_is_quarter(self, splits_df: pl.DataFrame) -> None:
+        """Observation on ex_date AFTER known_from (21:00 vs 20:15 UTC) -> CAF=0.25."""
         obs_ts = datetime(2020, 8, 31, 21, 0, 0, tzinfo=timezone.utc)
         assert obs_ts > SPLIT_KNOWN_FROM, "Precondition: obs_ts must be after known_from"
 
@@ -150,17 +150,19 @@ class TestComputeCAFScalar:
             splits_df=splits_df,
             sec_id=SEC_ID,
         )
-        assert caf == 4.0, f"Expected CAF=4.0 after known_from on ex_date, got {caf}"
+        assert caf == pytest.approx(0.25), (
+            f"Expected CAF=0.25 after known_from on ex_date, got {caf}"
+        )
 
-    def test_post_split_observation_caf_is_four(self, splits_df: pl.DataFrame) -> None:
-        """Observation well after ex_date and known_from -> CAF=4.0."""
+    def test_post_split_observation_caf_is_quarter(self, splits_df: pl.DataFrame) -> None:
+        """Observation well after ex_date and known_from -> CAF=0.25."""
         caf = compute_caf_scalar(
             price_date=PRICE_DATE,
             observation_timestamp=datetime(2020, 9, 15, 20, 15, 0, tzinfo=timezone.utc),
             splits_df=splits_df,
             sec_id=SEC_ID,
         )
-        assert caf == 4.0, f"Expected CAF=4.0 post-split, got {caf}"
+        assert caf == pytest.approx(0.25), f"Expected CAF=0.25 post-split, got {caf}"
 
     def test_no_splits_returns_one(self) -> None:
         """Empty splits DataFrame always returns CAF=1.0."""
@@ -207,7 +209,7 @@ class TestComputeCAFScalar:
         )
 
     def test_compound_splits_product(self) -> None:
-        """Two historical splits compound correctly: CAF = 4.0 * 7.0 = 28.0."""
+        """Two historical splits compound correctly: CAF = (1/4.0) * (1/7.0) = 1/28.0."""
         two_splits = pl.DataFrame(
             {
                 "sec_id": [SEC_ID, SEC_ID],
@@ -231,7 +233,7 @@ class TestComputeCAFScalar:
             splits_df=two_splits,
             sec_id=SEC_ID,
         )
-        assert caf == pytest.approx(28.0), f"Expected compound CAF=28.0, got {caf}"
+        assert caf == pytest.approx(1.0 / 28.0), f"Expected compound CAF={1.0 / 28.0}, got {caf}"
 
 
 # ---------------------------------------------------------------------------
@@ -263,16 +265,16 @@ class TestComputeCAFMatrix:
         pre_split_rows = result.filter(pl.col("trade_date") < SPLIT_EX_DATE)
         assert pre_split_rows["caf"].to_list() == pytest.approx([1.0] * len(pre_split_rows))
 
-    def test_matrix_post_split_historical_rows_have_caf_four(
+    def test_matrix_post_split_historical_rows_have_caf_quarter(
         self, prices_df: pl.DataFrame, splits_df: pl.DataFrame
     ) -> None:
-        """Historical prices (trade_date < ex_date) viewed post-split have CAF=4.0."""
+        """Historical prices (trade_date < ex_date) viewed post-split have CAF=0.25."""
         obs_df = self._make_obs_df([datetime(2020, 9, 15, 20, 15, 0, tzinfo=timezone.utc)])
         result = compute_caf_matrix(prices_df, splits_df, obs_df)
         pre_ex_date_rows = result.filter(pl.col("trade_date") < SPLIT_EX_DATE)
         cafs = pre_ex_date_rows["caf"].to_list()
-        assert all(c == pytest.approx(4.0) for c in cafs), (
-            f"Expected all pre-ex-date rows to have CAF=4.0, got {cafs}"
+        assert all(c == pytest.approx(0.25) for c in cafs), (
+            f"Expected all pre-ex-date rows to have CAF=0.25, got {cafs}"
         )
 
     def test_matrix_split_ex_date_row_has_caf_one(
@@ -302,7 +304,7 @@ class TestComputeCAFMatrix:
         """known_from guard works correctly in the vectorized path.
 
         Observation at 15:00 UTC on ex_date (before known_from 20:15 UTC):
-        historical rows must have CAF=1.0, not 4.0.
+        historical rows must have CAF=1.0, not 0.25.
         """
         obs_ts_before = datetime(2020, 8, 31, 15, 0, 0, tzinfo=timezone.utc)
         obs_ts_after = datetime(2020, 8, 31, 21, 0, 0, tzinfo=timezone.utc)
@@ -325,8 +327,8 @@ class TestComputeCAFMatrix:
             & (pl.col("trade_date") == date(2020, 7, 28))
         )
         assert len(after_guard) == 1
-        assert after_guard["caf"][0] == pytest.approx(4.0), (
-            "Post known_from should be CAF=4.0 in vectorized path"
+        assert after_guard["caf"][0] == pytest.approx(0.25), (
+            "Post known_from should be CAF=0.25 in vectorized path"
         )
 
     def test_matrix_missing_column_raises(
@@ -363,15 +365,15 @@ class TestAdjustedCloseAsOf:
         result = adjusted_close_as_of(prices_df, splits_df, obs_ts, SEC_ID)
         assert result["adj_close"].to_list() == pytest.approx(result["close"].to_list())
 
-    def test_post_split_pre_ex_date_prices_scaled_by_four(
+    def test_post_split_pre_ex_date_prices_scaled_by_quarter(
         self, prices_df: pl.DataFrame, splits_df: pl.DataFrame
     ) -> None:
-        """Post-split observation: prices before ex_date are scaled 4x."""
+        """Post-split observation: prices before ex_date are scaled 0.25x (divided by 4)."""
         obs_ts = datetime(2020, 9, 15, 20, 15, 0, tzinfo=timezone.utc)
         result = adjusted_close_as_of(prices_df, splits_df, obs_ts, SEC_ID)
         pre_split = result.filter(pl.col("trade_date") < SPLIT_EX_DATE)
         for row in pre_split.iter_rows(named=True):
-            assert row["adj_close"] == pytest.approx(row["close"] * 4.0), (
-                f"Expected adj_close = close * 4 for {row['trade_date']}, "
+            assert row["adj_close"] == pytest.approx(row["close"] * 0.25), (
+                f"Expected adj_close = close * 0.25 for {row['trade_date']}, "
                 f"got close={row['close']}, adj_close={row['adj_close']}"
             )

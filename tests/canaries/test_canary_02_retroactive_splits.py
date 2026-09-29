@@ -21,9 +21,10 @@ PRICE_DATE = date(2020, 7, 15)
 def test_retroactive_split_adjustment_respects_observation_time() -> None:
     """A future split cannot adjust a historical price before it is known.
 
-    Ledger's locked CAF convention multiplies historical prices by the split
-    ratio. Therefore the post-split July value is $1,600, not the guide's older
-    vendor-style $100 wording: $400 * 4 = $1,600 and CAF = 4.0.
+    A 4:1 forward split divides the price by 4 (multiplies by 0.25). Before the split
+    is known, the July 15 price is observed as $400.0 (CAF = 1.0). Once the split is
+    known on September 1, the historical July 15 price is adjusted to $100.0 (CAF = 0.25).
+    A naive/leaky pipeline applies the split retroactively, leaking $100.0 into July.
     """
     prices = build_price_series(
         start=PRICE_DATE,
@@ -54,8 +55,8 @@ def test_retroactive_split_adjustment_respects_observation_time() -> None:
     )
     expected = pl.DataFrame(
         {
-            "caf": [1.0, 4.0],
-            "adj_close": [400.0, 1600.0],
+            "caf": [1.0, 0.25],
+            "adj_close": [400.0, 100.0],
         }
     )
     assert_no_lookahead(pit.select(["caf", "adj_close"]), expected)
@@ -65,4 +66,4 @@ def test_retroactive_split_adjustment_respects_observation_time() -> None:
         leaky.select("adj_close"),
         pl.DataFrame({"adj_close": [400.0]}),
     )
-    assert leaky["adj_close"].item() == 1600.0
+    assert leaky["adj_close"].item() == 100.0

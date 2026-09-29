@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 
 import polars as pl
@@ -17,6 +17,7 @@ from ledger.backtest.runner import (
 )
 from ledger.backtest.simulation import SimulationConfig
 from ledger.backtest.strategy import StrategyConfig
+from ledger.backtest.synthetic import generate_synthetic_data
 from ledger.backtest.tear_sheet import build_tear_sheet
 from ledger.lineage.manifest import build_manifest, snapshot_input_files, write_manifest
 
@@ -156,77 +157,8 @@ def _generate_synthetic_data(
     start_date: date,
     end_date: date,
 ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
-    """Generate deterministic synthetic price bars and corporate actions."""
-    dates: list[date] = []
-    current = start_date
-    while current <= end_date:
-        if current.weekday() < 5:
-            dates.append(current)
-        current += timedelta(days=1)
-
-    if not dates:
-        raise ValueError("No weekday dates found within the specified date range.")
-
-    raw_rows: list[dict[str, object]] = []
-    preadj_rows: list[dict[str, object]] = []
-    midpoint_date = dates[len(dates) // 2]
-    split_sec_id = sec_ids[0]
-
-    for offset, d in enumerate(dates):
-        known_from = datetime.combine(d, time(21, 15), tzinfo=UTC)
-        for i, sec_id in enumerate(sec_ids):
-            base = 100.0 * (i + 1)
-            slope = (i + 1) * 0.5
-            current_level = base + slope * offset
-            if sec_id == split_sec_id and d < midpoint_date:
-                raw_close = current_level * 4.0
-            else:
-                raw_close = current_level
-
-            preadj_close = current_level
-
-            raw_rows.append(
-                {
-                    "sec_id": sec_id,
-                    "trade_date": d,
-                    "open": raw_close * 0.99,
-                    "high": raw_close * 1.01,
-                    "low": raw_close * 0.98,
-                    "close": raw_close,
-                    "volume": 1_000_000.0,
-                    "known_from": known_from,
-                }
-            )
-            preadj_rows.append(
-                {
-                    "sec_id": sec_id,
-                    "trade_date": d,
-                    "close": preadj_close,
-                }
-            )
-
-    splits_rows = [
-        {
-            "sec_id": split_sec_id,
-            "ex_date": midpoint_date,
-            "split_ratio": 4.0,
-            "known_from": datetime.combine(midpoint_date, time(21, 15), tzinfo=UTC),
-        }
-    ]
-
-    return (
-        pl.DataFrame(raw_rows),
-        pl.DataFrame(preadj_rows),
-        pl.DataFrame(
-            splits_rows,
-            schema={
-                "sec_id": pl.String,
-                "ex_date": pl.Date,
-                "split_ratio": pl.Float64,
-                "known_from": pl.Datetime("us", "UTC"),
-            },
-        ),
-    )
+    """Thin wrapper: delegates to the GBM-based generator in synthetic.py."""
+    return generate_synthetic_data(sec_ids, start_date, end_date)
 
 
 def _run(args: argparse.Namespace) -> int:

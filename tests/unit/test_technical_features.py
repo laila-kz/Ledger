@@ -83,9 +83,9 @@ class TestAdjustedCloseFeature:
         ctx = FeatureContext(prices=prices, splits=splits)
 
         result = compute_adj_close(ctx)
-        # Pre-split 500.0 unadjusted becomes 500.0 * 4.0 = 2000.0 in forward-adjusted terms
+        # Pre-split 500.0 unadjusted becomes 500.0 * 0.25 = 125.0 in backward-adjusted terms
         # and 125.0 becomes 125.0 * 1.0 = 125.0
-        assert result["adj_close"].to_list() == [2000.0, 2000.0, 125.0, 130.0]
+        assert result["adj_close"].to_list() == [125.0, 125.0, 125.0, 130.0]
 
 
 # =============================================================================
@@ -130,9 +130,9 @@ class TestMomentum20dFeature:
         base_dt = datetime(2020, 8, 1, 21, 0, tzinfo=UTC)
 
         # Flat economic price of $100 equivalent:
-        # Pre-split (days 0..14): raw close = 25.0 (unadjusted for 4:1)
+        # Pre-split (days 0..14): raw unadjusted close = 400.0 (4x post-split)
         # Post-split (days 15..29): raw close = 100.0
-        raw_closes = [25.0] * 15 + [100.0] * 15
+        raw_closes = [400.0] * 15 + [100.0] * 15
         prices = pl.DataFrame(
             {
                 "sec_id": ["SEC_AAPL_001"] * num_days,
@@ -154,7 +154,7 @@ class TestMomentum20dFeature:
         result = compute_momentum_20d(ctx)
 
         # For days 20..29, the 20-day window spans across the split date (day 15).
-        # Adjusted close for days 0..14 is 25.0 * 4.0 = 100.0
+        # Adjusted close for days 0..14 is 400.0 * 0.25 = 100.0
         # Adjusted close for days 15..29 is 100.0 * 1.0 = 100.0
         # Economic momentum across the split must be exactly 0.0 (flat), NOT +300% or -75%!
         for idx in range(20, 30):
@@ -194,13 +194,13 @@ class TestVolatility20dFeature:
             assert result["volatility_20d"][idx] == pytest.approx(0.0)
 
     def test_volatility_20d_split_invariance(self) -> None:
-        """Assert a 4:1 split does not create an artificial 400%+ volatility spike."""
+        """Assert a 4:1 split does not create an artificial volatility spike."""
         num_days = 30
         base_date = date(2020, 8, 1)
         base_dt = datetime(2020, 8, 1, 21, 0, tzinfo=UTC)
 
-        # Pre-split raw 25.0, post-split raw 100.0 (constant economic price)
-        raw_closes = [25.0] * 15 + [100.0] * 15
+        # Pre-split raw 400.0, post-split raw 100.0 (constant economic price)
+        raw_closes = [400.0] * 15 + [100.0] * 15
         prices = pl.DataFrame(
             {
                 "sec_id": ["SEC_AAPL_001"] * num_days,

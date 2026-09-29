@@ -66,7 +66,7 @@ pit_eps(t, known_at) = eps_version(max(v | known_from(v) ≤ known_at))
 
 ### The Problem
 
-Stock splits are applied retroactively. A naive system applies all splits to the complete price history, causing future splits to artificially inflate historical prices.
+Stock splits are applied retroactively. A naive system applies all splits to the complete price history, causing future splits to artificially lower historical nominal price levels before the corporate action occurs.
 
 ```
 Timeline: Retroactive Split Adjustment
@@ -75,22 +75,22 @@ July 2020: Price = $400        Aug 31, 2020: 4:1 Split Announced & Executed
    │                                    │
    ▼                                    ▼
                           
-Naive approach: $400 × 4 = $1600 for July (WRONG: split not yet known)
+Naive approach: $400 / 4 = $100 for July (WRONG: future 4:1 split leaked retroactively)
                 
-Ledger multiply-up convention:
-   Before split known: CAF = 1.0  → Price = $400
-   After split known:  CAF = 4.0  → Price = $400 × 4 = $1600
-                       (but we store original $400, apply CAF at query time)
+Ledger backward-adjustment convention:
+   Before split known: CAF = 1.0   → Price = $400
+   After split known:  CAF = 0.25  → Price = $400 × 0.25 = $100
+                       (we store original $400, apply CAF dynamically at query time)
 ```
 
 ### Test Assertion
 
-**Scenario:** July 2020 price = $400, 4:1 split on 2020-08-31 with known_from = 2020-09-01.
+**Scenario:** July 2020 unadjusted price = $400, 4:1 split on 2020-08-31 with known_from = 2020-09-01.
 
 **Canary 02 Validates:**
 - July observation (before split known): `CAF = 1.0`, adjusted_price = `$400` ✓
 - August observation (before split known): `CAF = 1.0`, adjusted_price = `$400` ✓
-- September observation (after split known): `CAF = 4.0`, adjusted_price = `$1600` ✓
+- September observation (after split known): `CAF = 0.25`, adjusted_price = `$100` ✓
 
 ---
 

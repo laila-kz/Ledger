@@ -8,7 +8,7 @@ Mathematical Definition
 -----------------------
 For a raw price date t and observation timestamp T_obs:
 
-    CAF(t, T_obs) = PRODUCT of split_ratio_k
+    CAF(t, T_obs) = PRODUCT of (1.0 / split_ratio_k)
                     for all splits k where:
                         t < ex_date_k <= T_obs   (split happened after price date, on or before obs)
                         AND known_from_k <= T_obs (we actually knew about it by obs time)
@@ -19,13 +19,13 @@ Then:
 Why This Prevents Lookahead Bias
 ---------------------------------
 A static "adjusted" price series (e.g., from yfinance auto_adjust=True) applies ALL
-future splits retroactively � so the July 2020 price of AAPL is already divided by 4
+future splits retroactively — so the July 2020 price of AAPL is already divided by 4
 even when simulating a decision made in July 2020. This leaks the August 2020 split.
 
-The CAF engine fixes this by computing the product dynamically:
-- At T_obs = 2020-08-15: no splits are in scope -> CAF = 1.0 -> adj_close = raw_close.
+The CAF engine fixes this by computing the adjustment factor dynamically:
+- At T_obs = 2020-08-15: no splits are in scope -> CAF = 1.0 -> adj_close = raw_close ($400).
 - At T_obs = 2020-09-01: the 4:1 split (known_from ~= 2020-08-31 20:15 UTC) is in scope
-  -> CAF = 4.0 -> adj_close = raw_close * 4.
+  -> CAF = 0.25 -> adj_close = raw_close * 0.25 ($100).
 
 The known_from guard is the final line of defence: even on the ex-date, if the split
 hasn't been confirmed and recorded yet (e.g. before market close), CAF stays at 1.0.
@@ -81,7 +81,7 @@ def compute_caf_scalar(
         sec_id: The security identifier to filter by.
 
     Returns:
-        The CAF scalar (>= 1.0). Returns 1.0 if no qualifying splits exist.
+        The CAF scalar (<= 1.0 for forward splits). Returns 1.0 if no qualifying splits exist.
     """
     if observation_timestamp.tzinfo is None:
         observation_timestamp = observation_timestamp.replace(tzinfo=timezone.utc)
@@ -101,7 +101,7 @@ def compute_caf_scalar(
     if relevant.is_empty():
         return 1.0
 
-    return float(relevant["split_ratio"].product())
+    return float((1.0 / relevant["split_ratio"]).product())
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +123,8 @@ def compute_caf_matrix(
     1. Cross-join each (sec_id, observation_timestamp) x prices on sec_id.
     2. Left-join in splits on sec_id.
     3. Apply the three CAF filter predicates as Polars expressions in one pass.
-    4. Group by (sec_id, observation_timestamp, trade_date) and product-aggregate qualifying ratios.
+    4. Group by (sec_id, observation_timestamp, trade_date) and product-aggregate
+       the qualifying reciprocal ratios (1 / split_ratio).
     5. Fill 1.0 for groups with no qualifying splits.
     6. Compute adj_close = close * caf.
 
@@ -179,7 +180,7 @@ def compute_caf_matrix(
             & (pl.col("ex_date") <= pl.col("_obs_date"))
             & (pl.col("known_from") <= pl.col("observation_timestamp"))
         )
-        .then(pl.col("split_ratio"))
+        .then(1.0 / pl.col("split_ratio"))
         .otherwise(pl.lit(None, dtype=pl.Float64))
         .alias("_qualifying_ratio")
     )

@@ -77,9 +77,8 @@ def test_pipelines_diverge_before_split_is_known() -> None:
     for offset in range(split_offset + 1):
         trade_date = base_date + timedelta(days=offset)
         known_from = datetime.combine(trade_date, datetime.min.time(), tzinfo=UTC).replace(hour=21)
-        a_raw = (
-            25.0 + 0.1 * offset if offset < split_offset else 100.0 + 0.1 * (offset - split_offset)
-        )
+        level_a = 100.0 + 1.0 * offset
+        a_raw = level_a * 4.0 if offset < split_offset else level_a
         rows.extend(
             [
                 {
@@ -91,7 +90,7 @@ def test_pipelines_diverge_before_split_is_known() -> None:
                 {
                     "sec_id": "SEC_B_001",
                     "trade_date": trade_date,
-                    "close": 100.0 + 0.3 * offset,
+                    "close": 100.0 + 0.05 * offset,
                     "known_from": known_from,
                 },
             ]
@@ -100,7 +99,7 @@ def test_pipelines_diverge_before_split_is_known() -> None:
     raw_prices = pl.DataFrame(rows)
     preadjusted = raw_prices.with_columns(
         pl.when((pl.col("sec_id") == "SEC_A_001") & (pl.col("trade_date") < split_date))
-        .then(pl.col("close") * 4.0)
+        .then(pl.col("close") / 4.0)
         .otherwise(pl.col("close"))
         .alias("close")
     )
@@ -137,5 +136,5 @@ def test_pipelines_diverge_before_split_is_known() -> None:
 
     leaky_selected = result.leaky.weights.filter(pl.col("weight") > 0)["sec_id"].to_list()
     corrected_selected = result.corrected.weights.filter(pl.col("weight") > 0)["sec_id"].to_list()
-    assert leaky_selected == ["SEC_B_001"]
-    assert corrected_selected == ["SEC_A_001"]
+    assert leaky_selected == ["SEC_A_001"]
+    assert corrected_selected == ["SEC_B_001"]
