@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any
 
@@ -58,12 +58,20 @@ def parse_splits_series(
         if ratio <= 0:
             continue
 
-        ex_dt = datetime.combine(ex_d, datetime.min.time())
+        # Anchor at midday New York, not naive midnight: `_to_ny_datetime`
+        # reads a naive value as UTC, so midnight resolves to the previous day
+        # in New York and the calendar walks back a session. See the same note
+        # in market_data.parse_yfinance_ohlcv_dataframe.
+        ex_dt = datetime.combine(ex_d, time(hour=12))
         actionable_ny = get_actionable_timestamp(ex_dt, is_market_data=True)
         known_from_utc = actionable_ny.astimezone(timezone.utc)
 
         records.append(
             {
+                # sec_id must be carried here, not just passed in: the split
+                # table is the join key between corporate actions and prices, so
+                # a null sec_id silently detaches every split from its security
+                # and the CAF has nothing to apply.
                 "sec_id": sec_id,
                 "action_type": "SPLIT",
                 "ex_date": ex_d,
@@ -102,7 +110,8 @@ def parse_dividends_series(
         if amount <= 0:
             continue
 
-        ex_dt = datetime.combine(ex_d, datetime.min.time())
+        # Midday anchor for the same reason as the split path above.
+        ex_dt = datetime.combine(ex_d, time(hour=12))
         actionable_ny = get_actionable_timestamp(ex_dt, is_market_data=True)
         known_from_utc = actionable_ny.astimezone(timezone.utc)
 

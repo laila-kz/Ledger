@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import polars as pl
@@ -17,7 +18,12 @@ from ledger.backtest.runner import (
 )
 from ledger.backtest.simulation import SimulationConfig
 from ledger.backtest.strategy import StrategyConfig
-from ledger.backtest.synthetic import generate_synthetic_data
+from ledger.backtest.synthetic import (
+    EPS_SCREEN_THRESHOLD,
+    OBSERVATION_TIME,
+    generate_synthetic_data,
+    leaky_fundamentals_view,
+)
 from ledger.backtest.tear_sheet import build_tear_sheet
 from ledger.lineage.manifest import build_manifest, snapshot_input_files, write_manifest
 
@@ -98,6 +104,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate synthetic multi-ticker prices & corporate actions for offline demo.",
     )
     parser.add_argument(
+        "--require-price-above",
+        type=float,
+        default=None,
+        help=(
+            "Level-dependent eligibility screen: only hold names whose "
+            "--level-column exceeds this price. On the point-in-time arm the level "
+            "column is the unadjusted trade print, so a vendor pre-adjusted control "
+            "embeds future splits into it and the two arms will select different "
+            "names."
+        ),
+    )
+    parser.add_argument(
+        "--level-column",
+        default="close",
+        help=("Column read by --require-price-above (default: close, the unadjusted trade level)."),
+    )
+    parser.add_argument(
         "--data-root",
         type=Path,
         default=Path("data/raw"),
@@ -156,7 +179,7 @@ def _generate_synthetic_data(
     sec_ids: tuple[str, ...],
     start_date: date,
     end_date: date,
-) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame]:
     """Thin wrapper: delegates to the GBM-based generator in synthetic.py."""
     return generate_synthetic_data(sec_ids, start_date, end_date)
 
@@ -171,17 +194,20 @@ def _run(args: argparse.Namespace) -> int:
 
     if args.synthetic:
         LOGGER.info("Generating synthetic market data for %d tickers.", len(tickers))
-        raw_prices, preadjusted, splits = _generate_synthetic_data(sec_ids, start_date, end_date)
+        raw_prices, preadjusted, splits, fundamentals = _generate_synthetic_data(
+            sec_ids, start_date, end_date
+        )
         observation_matrix = _build_observations(raw_prices, sec_ids, start_date, end_date)
         input_snapshot = [
             {
                 "path": "synthetic://deterministic-market-generator",
-                "sha256": "sha256:synthetic_deterministic_market_fixture_v1",
+                "sha256": "sha256:synthetic_deterministic_market_fixture_v2",
                 "size_bytes": len(raw_prices),
                 "modified_time_utc": datetime.now(timezone.utc).isoformat(),
             }
         ]
     else:
+        fundamentals = None
         raw_source = args.prices_path or (args.data_root / "market_ohlcv")
         raw_prices = _read_parquet_source(raw_source, "raw prices")
         raw_prices = _filter_prices(raw_prices, sec_ids, start_date, end_date)
@@ -212,20 +238,43 @@ def _run(args: argparse.Namespace) -> int:
         input_snapshot = snapshot_input_files(input_paths)
 
     LOGGER.info("Running leaky and corrected pipelines for %d tickers.", len(tickers))
+
+    # The same raw fundamentals frame feeds both arms. The only difference is
+    # the availability rule: point-in-time on one side, fiscal-period-end
+    # dating on the other. That isolates the leak instead of confounding it.
+    corrected_views: tuple[pl.DataFrame, ...] = ()
+    leaky_views: tuple[pl.DataFrame, ...] = ()
+    require_eps_above: float | None = None
+    if fundamentals is not None and not fundamentals.is_empty():
+        corrected_views = (fundamentals,)
+        leaky_views = (leaky_fundamentals_view(fundamentals),)
+        require_eps_above = EPS_SCREEN_THRESHOLD
+
     comparison = run_comparison(
         observation_matrix=observation_matrix,
         raw_prices=raw_prices,
         preadjusted_prices=preadjusted,
         splits=splits,
+        # Both paths now store genuinely as-traded levels. Ingestion undoes the
+        # provider's full-history split adjustment before writing, so the seeded
+        # catalog behaves like the synthetic GBM prints and both arms need the
+        # ex-date ratio applied. A preadjusted basis remains opt-in for callers
+        # that supply adjusted levels.
+        raw_prices_are_preadjusted=False,
         strategy_config=StrategyConfig(
             top_n=args.top_k,
             rebalance_frequency=args.rebalance_frequency,
             weekly_rebalance_day=args.weekly_rebalance_day,
+            require_eps_above=require_eps_above,
+            require_price_above=args.require_price_above,
+            level_column=args.level_column,
         ),
         simulation_config=SimulationConfig(
             transaction_cost_bps=args.cost_bps,
             initial_capital=args.initial_capital,
         ),
+        leaky_feature_views=leaky_views,
+        corrected_feature_views=corrected_views,
         leaky_universe=tuple(tickers),
     )
     periods_per_year = 52 if args.rebalance_frequency == "weekly" else TRADING_DAYS_PER_YEAR
@@ -271,8 +320,15 @@ def _run(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(f"Dry run: no artifacts written. Run ID: {manifest['run_id']}")
         return 0
-
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Machine-readable metrics. The PDF is a rendering of these numbers, so
+    # publishing them as data keeps the document and the audit trail from
+    # drifting apart, and lets docs quote measured output rather than prose.
+    metrics_path = run_dir / "metrics.json"
+    metrics_path.write_text(json.dumps(results, indent=2, sort_keys=True), encoding="utf-8")
+    print(f"Metrics: {metrics_path}")
+
     comparison.leaky.simulation.write_parquet(run_dir / artifact_names["returns_leaky"])
     comparison.corrected.simulation.write_parquet(run_dir / artifact_names["returns_corrected"])
     _write_equity(comparison.leaky.simulation, run_dir / artifact_names["equity_leaky"])
@@ -368,7 +424,7 @@ def _build_observations(
     )
     if not dates:
         raise ValueError("No trading dates remain after applying --start-date and --end-date.")
-    timestamps = [datetime.combine(day, time(21, 5), tzinfo=UTC) for day in dates]
+    timestamps = [datetime.combine(day, OBSERVATION_TIME, tzinfo=UTC) for day in dates]
     return pl.DataFrame(
         {
             "sec_id": [sec_id for sec_id in sec_ids for _ in timestamps],

@@ -68,6 +68,58 @@ def write_atomic_parquet(df: pl.DataFrame, target_path: Path) -> WrittenFileMeta
     )
 
 
+def filter_already_persisted(
+    df: pl.DataFrame,
+    base_dir: Path | str,
+    table_dir: str,
+    key_columns: list[str],
+) -> pl.DataFrame:
+    """Drop rows whose business key is already present on disk.
+
+    Storage is append-only, so re-running an ingestion would otherwise append a
+    second identical copy of every row. That broke the ``IdempotentReplay``
+    invariant the bitemporal model is verified against: seeding eight times
+    produced 48,288 rows for 6,036 distinct ``(sec_id, trade_date)`` keys, and
+    the duplication compounded wherever an aggregate met the data.
+
+    A row is considered already persisted when its business key is present with
+    identical payloads. A key present with *different* values is a genuine
+    correction and is kept, because a bitemporal store must retain the
+    superseding fact rather than silently drop it.
+
+    Returns the rows that still need writing; the caller keeps its existing
+    "no new rows" behaviour when this is empty.
+    """
+    root_dir = get_table_root_dir(base_dir, table_dir)
+    if not root_dir.exists():
+        return df
+
+    existing_files = sorted(root_dir.glob("**/*.parquet"))
+    if not existing_files:
+        return df
+
+    existing = pl.concat(
+        [pl.read_parquet(path) for path in existing_files],
+        how="diagonal_relaxed",
+    )
+
+    shared_keys = [c for c in key_columns if c in existing.columns]
+    if len(shared_keys) != len(key_columns):
+        return df
+
+    # Compare on business columns only; ingestion_seq legitimately differs.
+    payload_columns = [c for c in df.columns if c not in ("ingestion_seq",)]
+    shared_payload = [c for c in payload_columns if c in existing.columns]
+    if not shared_payload:
+        return df
+
+    known = existing.select(shared_payload).unique()
+    # nulls_equal matters: corporate actions carry null currency/cash_amount, and
+    # a default join treats NULL != NULL, so a pure replay would look like new
+    # data and get appended forever.
+    return df.join(known, on=shared_payload, how="anti", nulls_equal=True)
+
+
 def write_partitioned_market_ohlcv(
     df: pl.DataFrame,
     base_dir: Path | str = "data/raw",
@@ -77,7 +129,18 @@ def write_partitioned_market_ohlcv(
     """Write market OHLCV data partitioned by year=YYYY/month=MM/ into append-only Parquet files.
 
     Each partition receives a new immutable file: batch_{ingestion_seq}_{uuid}.parquet
+
+    Re-ingesting an unchanged range is a no-op: rows already present on disk
+    under the same business key and payload are filtered out first, so
+    re-running a seed does not duplicate history. See ``filter_already_persisted``.
     """
+    df = filter_already_persisted(
+        df=df,
+        base_dir=base_dir,
+        table_dir="market_ohlcv",
+        key_columns=["sec_id", date_col, "known_from"],
+    )
+
     if len(df) == 0:
         return []
 
@@ -117,7 +180,17 @@ def write_partitioned_corporate_actions(
     """Write corporate actions data partitioned by year=YYYY/ into append-only Parquet files.
 
     Each partition receives a new immutable file: batch_{ingestion_seq}_{uuid}.parquet
+
+    Re-ingesting an unchanged window is a no-op, matching the market OHLCV
+    writer, so the split table stays free of duplicate events.
     """
+    df = filter_already_persisted(
+        df=df,
+        base_dir=base_dir,
+        table_dir="corporate_actions",
+        key_columns=["sec_id", "action_type", date_col, "known_from"],
+    )
+
     if len(df) == 0:
         return []
 
@@ -152,7 +225,16 @@ def write_entity_map(
     """Write entity mapping data (flat directory layout) into append-only Parquet files.
 
     Writes to: data/raw/entity_map/batch_{ingestion_seq}_{uuid}.parquet
+
+    Re-registering an unchanged ticker set is a no-op.
     """
+    df = filter_already_persisted(
+        df=df,
+        base_dir=base_dir,
+        table_dir="entity_map",
+        key_columns=["sec_id", "valid_from"],
+    )
+
     if len(df) == 0:
         return []
 

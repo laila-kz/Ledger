@@ -46,14 +46,14 @@ Verify that all linters, strict type checkers, unit tests, and property fuzzing 
 # 2. Check strict type safety
 .\.venv\Scripts\mypy ledger
 
-# 3. Run full test suite (180 unit, canary, & hypothesis property tests)
+# 3. Run full test suite (215 unit, canary, & hypothesis property tests)
 .\.venv\Scripts\pytest
 ```
 
 **Expected Result:**
 - `ruff check`: `All checks passed!`
-- `mypy`: `Success: no issues found in 38 source files`
-- `pytest`: `180 passed`
+- `mypy`: `Success: no issues found in 40 source files`
+- `pytest`: `215 passed, 1 deselected`
 
 ---
 
@@ -80,9 +80,9 @@ Seed the local DuckDB/Parquet bitemporal catalog with historical OHLCV data, cor
 python scripts/seed_week1.py
 ```
 **Output Artifacts Created:**
-- Partitioned Parquet files in `artifacts/catalog/fact_market_ohlcv_raw/`
-- Corporate actions in `artifacts/catalog/fact_corporate_actions_raw/`
-- Ticker entity map in `artifacts/catalog/dim_entity_ticker_map/`
+- Partitioned Parquet files in `data/raw/market_ohlcv/`
+- Corporate actions in `data/raw/corporate_actions/`
+- Ticker entity map in `data/raw/entity_map/`
 
 ---
 
@@ -97,8 +97,8 @@ ledger lint examples/sample_strategy.py
 
 ---
 
-### Step 3: Run the 10 Leakage Canary Tests
-Execute the deterministic test suite validating all 6 lookahead mechanisms (restatements, retroactive splits, after-hours filings, survivorship bias, filing lag, ticker relabeling).
+### Step 3: Run the 16 Leakage Canary Tests
+Execute the deterministic test suite validating all 6 lookahead mechanisms (restatements, retroactive splits, after-hours filings, survivorship bias, filing lag, ticker relabeling), the synthetic demo sanity checks, and the harness self-tests.
 
 ```powershell
 ledger canaries
@@ -108,12 +108,13 @@ ledger canaries
 ===================== test session starts ======================
 tests/canaries/test_canary_01_restatements.py ✓
 tests/canaries/test_canary_02_retroactive_splits.py ✓
-tests/canaries/test_canary_03_after_hours_session.py ✓
+tests/canaries/test_canary_03_after_hours_session.py ✓✓
 tests/canaries/test_canary_04_survivorship_universe.py ✓
 tests/canaries/test_canary_05_filing_lag_window.py ✓
 tests/canaries/test_canary_06_ticker_relabeling.py ✓
-tests/canaries/test_harness_self_test.py ✓✓✓✓
-===================== 10 passed in 1.79s ======================
+tests/canaries/test_canary_07_synthetic_demo_sanity.py ✓✓✓✓✓✓
+tests/canaries/test_harness_self_test.py ✓✓✓
+===================== 16 passed in 2.49s ======================
 ```
 
 ---
@@ -130,14 +131,25 @@ ledger run-comparison --synthetic --start-date 2020-01-01 --end-date 2023-12-31
 ```
 **Expected Output:**
 ```text
-┌─────────────────────┬──────────────┬──────────────┬────────────┐
-│ Metric              │ Leaky Result │ PIT-Correct  │ Difference │
-├─────────────────────┼──────────────┼──────────────┼────────────┤
-│ Total Return        │   +398%      │   +242%      │   -156%    │
-│ Sharpe Ratio        │   29.20      │   2.03       │   -27.17   │
-│ Max Drawdown        │   0.0%       │   -31.1%     │   -31.1%   │
-│ Annual Return       │   +49.5%     │   +36.1%     │   -13.4%   │
-│ Win Rate (daily)    │   95.3%      │   95.2%      │   -0.1%    │
+Metric                |        Leaky |    Corrected |        Delta
+------------------------------------------------------------------
+Cumulative Return     |      +46.64% |      +30.70% |      -15.95%
+CAGR                  |      +10.07% |       +6.94% |       -3.13%
+Annualized Volatility |      +20.25% |      +20.09% |       -0.17%
+Sharpe Ratio          |        +0.56 |        +0.42 |       -0.14
+Max Drawdown          |      -28.29% |      -28.29% |       -0.00%
+Calmar Ratio          |        +0.36 |        +0.25 |       -0.11
+Win Rate              |      +46.07% |      +45.97% |       -0.10%
+Profit Factor         |        +1.10 |        +1.07 |       -0.03
+Mean Turnover         |      +26.39% |      +27.03% |       +0.65%
+------------------------------------------------------------------
+Delta convention: corrected - leaky.
+Metrics: artifacts/runs/<RUN_ID>/metrics.json
+PDF Report: artifacts/runs/<RUN_ID>/report.pdf
+Run ID: <RUN_ID>
+Manifest: artifacts/runs/<RUN_ID>/manifest.json
+```
+
 **Output Artifacts Created:**
 - `report.pdf` (Publication-grade 2-page institutional PDF tear-sheet with vector charts, canary audit table, and TLA+ verification seal)
 - `manifest.json` (SHA-256 fingerprint of inputs, feature definitions, and lockfile)
@@ -197,9 +209,13 @@ ledger verify-manifest artifacts/runs/<TAB>/manifest.json
 Manifest Verification Results
 ========================================
 ✓ PASS: Manifest JSON valid
+✓ PASS: Input dataset: synthetic://deterministic-market-generator
 ✓ PASS: Feature definition: adj_close
 ✓ PASS: Feature definition: momentum_20d
+✓ PASS: Feature definition: sma_50d
+✓ PASS: Feature definition: volatility_20d
 ✓ PASS: Lockfile: requirements.txt
+✓ PASS: Git commit SHA
 ✓ PASS: Manifest run_id derivation
 ========================================
 Overall: PASSED ✓
@@ -242,7 +258,7 @@ Use this minute-by-minute transcript and visual guide when recording or presenti
 ---
 
 #### ⏱️ **0:45 - 1:30 | Data Ingestion & Bitemporal Schema**
-* **Visual:** Run `python scripts/seed_week1.py` in PowerShell. Show generated Parquet files in `artifacts/catalog/`.
+* **Visual:** Run `python scripts/seed_week1.py` in PowerShell. Show generated Parquet files in `data/raw/`.
 * **Narration:**
   > "Let me show you our ingestion pipeline. Running `python scripts/seed_week1.py` ingests raw market OHLCV bars and corporate actions into append-only bitemporal Parquet partitions. Notice how we store raw pre-split prices and compute corporate action factors dynamically using `known_from` transaction timestamps, ensuring historical facts are never retroactively overwritten."
 
@@ -255,17 +271,17 @@ Use this minute-by-minute transcript and visual guide when recording or presenti
 
 ---
 
-#### ⏱️ **2:15 - 3:15 | The 10 Leakage Canary Tests**
+#### ⏱️ **2:15 - 3:15 | The 16 Leakage Canary Tests**
 * **Visual:** Run `ledger canaries`.
 * **Narration:**
-  > "Next, we execute Ledger's **10 Leakage Canary Tests**. These canary tests pair point-in-time calculation engines against naive reference implementations across 6 key leakage mechanisms—including SEC restatements, stock split timing, and filing lag windows. Every test passes deterministically, proving that our point-in-time engine prevents future data contamination."
+  > "Next, we execute Ledger's **16 Leakage Canary Tests**. These canary tests pair point-in-time calculation engines against naive reference implementations across 6 key leakage mechanisms—including SEC restatements, stock split timing, and filing lag windows—plus synthetic-demo sanity checks and harness self-tests. Every test passes deterministically, proving that our point-in-time engine prevents future data contamination."
 
 ---
 
 #### ⏱️ **3:15 - 4:15 | Comparative Backtest & Institutional PDF Report**
 * **Visual:** Run `ledger run-comparison --synthetic --start-date 2020-01-01 --end-date 2023-12-31`. Open generated `artifacts/runs/<RUN_ID>/report.pdf`.
 * **Narration:**
-  > "Now, let's run the comparative backtest engine. Ledger runs the exact same momentum strategy across two parallel pipelines: a naive leaky pipeline and our point-in-time engine. Notice that in addition to the terminal tear-sheet, Ledger automatically generates a publication-grade institutional PDF audit report (`report.pdf`). Look at the comparative matrix and underwater drawdown chart: the leaky backtest claims an unrealistically high Sharpe Ratio of 29.20 and +398% return. But our point-in-time engine reveals the realistic Sharpe of 2.03. Lookahead bias massively inflated Sharpe and completely masked drawdown risk!"
+  > "Now, let's run the comparative backtest engine. Ledger runs the exact same momentum strategy across two parallel pipelines: a naive leaky pipeline and our point-in-time engine. Notice that in addition to the terminal tear-sheet, Ledger automatically generates a publication-grade institutional PDF audit report (`report.pdf`). Look at the comparative matrix and underwater drawdown chart: the leaky backtest claims an inflated +46.64% return at a Sharpe Ratio of 0.56, while our point-in-time engine reveals the realistic +30.70% return at a Sharpe of 0.42. Lookahead bias inflated both return and Sharpe by double-counting the retroactive split!"
 
 ---
 

@@ -144,6 +144,11 @@ class TestIngestionPipelinesWithMocks:
         )
         mock_ticker = MagicMock()
         mock_ticker.history.return_value = mock_pdf
+        # The provider's series is adjusted across its ENTIRE history, so
+        # ingestion needs the full split history to undo that adjustment. The
+        # 2020-08-31 4:1 post-dates this 2020-08-28 bar, so the stored as-traded
+        # close must be 505.0 * 4.
+        mock_ticker.splits = pd.Series([4.0], index=pd.to_datetime(["2020-08-31"]))
         mock_ticker_cls.return_value = mock_ticker
 
         entry = ingest_ohlcv(
@@ -160,9 +165,17 @@ class TestIngestionPipelinesWithMocks:
 
         # Verify DuckDB catalog can query the written partition
         catalog = LedgerCatalog(base_dir=temp_raw_dir)
-        res = catalog.query("SELECT sec_id, trade_date, close FROM fact_market_ohlcv_raw")
+        res = catalog.query(
+            "SELECT sec_id, trade_date, open, high, low, close, volume FROM fact_market_ohlcv_raw"
+        )
         assert len(res) == 1
-        assert res["close"][0] == 505.0
+        # As-traded print, not the provider's pre-scaled 505.0.
+        assert res["close"][0] == pytest.approx(505.0 * 4.0)
+        assert res["open"][0] == pytest.approx(500.0 * 4.0)
+        assert res["high"][0] == pytest.approx(510.0 * 4.0)
+        assert res["low"][0] == pytest.approx(495.0 * 4.0)
+        # Volume is already as-traded and must NOT be rescaled.
+        assert res["volume"][0] == 20000000
         catalog.close()
 
     @patch("ledger.ingestion.corporate_actions.yf.Ticker")

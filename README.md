@@ -50,24 +50,25 @@ Captured terminal output from a fresh run:
 ```text
 Metric                |        Leaky |    Corrected |        Delta
 ------------------------------------------------------------------
-Cumulative Return     |     +398.55% |     +242.25% |     -156.30%
-CAGR                  |      +49.59% |      +36.16% |      -13.43%
-Annualized Volatility |       +1.33% |      +15.46% |      +14.13%
-Sharpe Ratio          |       +29.20 |        +2.03 |       -27.17
-Max Drawdown          |       +0.00% |      -31.15% |      -31.15%
-Calmar Ratio          |          n/a |        +1.16 |          n/a
-Win Rate              |      +95.30% |      +95.20% |       -0.10%
-Profit Factor         |          n/a |        +5.15 |          n/a
-Mean Turnover         |       +0.10% |       +0.22% |       +0.13%
+Cumulative Return     |      +46.64% |      +30.70% |      -15.95%
+CAGR                  |      +10.07% |       +6.94% |       -3.13%
+Annualized Volatility |      +20.25% |      +20.09% |       -0.17%
+Sharpe Ratio          |        +0.56 |        +0.42 |       -0.14
+Max Drawdown          |      -28.29% |      -28.29% |       -0.00%
+Calmar Ratio          |        +0.36 |        +0.25 |       -0.11
+Win Rate              |      +46.07% |      +45.97% |       -0.10%
+Profit Factor         |        +1.10 |        +1.07 |       -0.03
+Mean Turnover         |      +26.39% |      +27.03% |       +0.65%
 ------------------------------------------------------------------
-Delta convention: corrected - leaky. 'n/a' means the metric was undefined.
-PDF Report: artifacts/runs/f68c600650f5907a/report.pdf
-Run ID: f68c600650f5907a
-Manifest: artifacts/runs/f68c600650f5907a/manifest.json
+Delta convention: corrected - leaky.
+Metrics: artifacts/runs/638e1937b1d9db50/metrics.json
+PDF Report: artifacts/runs/638e1937b1d9db50/report.pdf
+Run ID: 638e1937b1d9db50
+Manifest: artifacts/runs/638e1937b1d9db50/manifest.json
 ```
 
 Note on Synthetic Generator Properties:
-The synthetic dataset generator (`_generate_synthetic_data` in `ledger/backtest/run_comparison.py`) creates a deterministic linear price series (`current_level = base + slope * offset`) with a 4:1 stock split at the date midpoint. Because daily price levels strictly increase without random walk noise, the price series contains zero market drawdowns, resulting in `Max Drawdown = +0.00%` for the leaky baseline. In the leaky pipeline, ignoring the 4:1 split factor produces an unadjusted 4x price jump post-split, artificially inflating the Sharpe ratio to 29.20. The point-in-time pipeline applies the CAF matrix across the split boundary, correcting portfolio returns to a Sharpe of 2.03 and exposing a -31.15% drawdown caused by rebalancing adjustments across split dates.
+The synthetic dataset generator (`generate_synthetic_data` in `ledger/backtest/synthetic.py`) builds a deterministic, seeded geometric-Brownian-motion price path (Itô-corrected drift) with a single 4:1 forward split at the date midpoint, emitted three ways: true as-traded OHLCV, a vendor pre-adjusted close series that already reflects every future split, and the split record. The leaky pipeline reads the pre-adjusted close while ignoring the split factor, so it double-counts the split: the unadjusted 4x level jump inflates cumulative return (+46.64% vs +30.70%) and the Sharpe ratio (+0.56 vs +0.42) against a realistic, non-zero market drawdown. The point-in-time pipeline instead reconstructs as-traded levels on ingest and applies the CAF matrix across the split boundary, so both arms observe the same economic price path and the only difference is the leak. Because the generator is seeded, these figures reproduce on every run; the run ID varies per invocation.
 
 ### Static AST Leakage Detection
 
@@ -95,11 +96,11 @@ pytest
 
 Captured output:
 ```text
-===================== 180 passed, 1 deselected in 24.38s ======================
+===================== 215 passed, 1 deselected in 25.99s ======================
 ```
 
 Note on Deselected Test:
-The single deselected test (`1 deselected`) is `tests/integration/test_yfinance_live_ingestion.py`. It is tagged with `@pytest.mark.integration` and excluded by default via `addopts = "-v --tb=short -m 'not integration'"` in `pyproject.toml` to prevent network dependencies during offline test suite execution.
+The single deselected test (`1 deselected`) is `tests/integration/test_ingestion_smoke.py`. It is tagged with `@pytest.mark.integration` and excluded by default via `addopts = "-v --tb=short -m 'not integration'"` in `pyproject.toml` to prevent network dependencies during offline test suite execution. Run it explicitly with `pytest tests/integration -m integration`.
 
 ### Leakage Canaries
 
@@ -111,21 +112,22 @@ ledger canaries
 
 Captured output:
 ```text
-============================= 10 passed in 1.93s ==============================
+============================= 16 passed in 2.49s ==============================
 ```
 
-The canary suite consists of 6 core defect tests and 4 harness self-tests:
+The canary suite consists of 16 tests across 8 files:
 - `canary_01_restatements`: Verifies that fundamental restatements are isolated until their `known_from` publication timestamp.
 - `canary_02_retroactive_splits`: Verifies that split adjustments are computed relative to observation time rather than applied retroactively to raw storage.
-- `canary_03_after_hours_session`: Verifies that filings published after 16:00 EST are shifted to the next trading session open.
+- `canary_03_after_hours_session`: Two tests verifying that filings published after 16:00 ET are shifted to the next session open, and that a Friday rebalance cannot consume an after-hours filing.
 - `canary_04_survivorship_universe`: Verifies that delisted entities remain visible in historical universe queries prior to delisting.
 - `canary_05_filing_lag_window`: Verifies that fiscal quarter fundamentals are hidden during the lag period before public release.
 - `canary_06_ticker_relabeling`: Verifies continuous identity tracking when ticker symbols change (e.g. FB to META).
-- `test_harness_self_test`: Four tests asserting that deliberate lookahead patterns injected into the test harness trigger canary failures.
+- `canary_07_synthetic_demo_sanity`: Six tests over the synthetic demo asserting that the leaky arm out-returns and out-Sharpes the corrected arm, that removing the injected leak makes the two arms identical, and that the reported Sharpe stays within a plausible range.
+- `test_harness_self_test`: Three tests asserting that deliberate lookahead patterns injected into the test harness trigger canary failures.
 
 ### Development Trade-Offs and Bug Fixes
 
-1. Yahoo Finance Pre-Adjusted Data vs. Raw Price Model: Yahoo Finance's public API (`yfinance`) returns historical OHLCV data that is already split-adjusted upstream by the vendor. In `scripts/seed_week1.py`, historical TSLA assertions initially failed because raw pre-split price ranges (~$2,200) were expected, whereas Yahoo returned split-adjusted prices (~$147.56). Widening assertion bounds (`100.0 < tsla_close < 2500.0`) allowed the seed script to accept Yahoo's pre-adjusted feed. However, for real-data runs where point-in-time split adjustments are computed via `compute_caf_matrix`, users must supply unadjusted raw price partitions or use `--synthetic`.
+1. Vendor Pre-Adjusted Feeds vs. the Raw Price Contract: Yahoo Finance's public API (`yfinance`) returns OHLCV that is already split-adjusted across its *entire* history, so a bar dated before a later split arrives pre-scaled by that split. Stored under a table named "raw", that is look-ahead: the 2022-08-25 TSLA 3:1 split would be visible in a 2020-08-28 price. Ingestion now inverts the vendor adjustment: `_undo_full_history_split_adjustment` scales each bar by the product of split ratios whose ex-date is strictly after that bar's trade date, using the full split history (including splits after the requested window). Volume is left untouched because it is reported as-traded. Verified against ground truth: AAPL 2020-01-02 is stored at $300.35 (75.0875 × 4) and 2020-08-28 at $499.23, so a 2020 level no longer reflects the later 2020-08-31 or 2022-08-25 splits, and real-data runs feed the CAF matrix true as-traded levels.
 2. Windows Console Encoding: Running CLI commands on Windows PowerShell produced `UnicodeEncodeError` when attempting to write UTF-8 checkmarks (`✓`) to legacy `cp1252` stdout streams. Fixed by reconfiguring `sys.stdout` to UTF-8 with character replacement fallbacks in `verify_manifest.py` and `seed_week1.py`.
 3. Mypy Strict Type Overrides: Third-party imports (`reportlab`, `matplotlib`) lacked inline type stubs, causing `mypy ledger` to fail in strict mode. Fixed by configuring explicit module overrides in `pyproject.toml`.
 
@@ -133,7 +135,7 @@ The canary suite consists of 6 core defect tests and 4 harness self-tests:
 
 ### Cryptographic Manifest Verification
 
-Each backtest run generates a `manifest.json` recording SHA-256 hashes of input Parquet partitions, feature definitions, and environment lockfiles (`requirements.txt`).
+Each backtest run generates a `manifest.json` recording SHA-256 hashes of input Parquet partitions, feature definitions, the environment lockfile (`requirements.txt`), and the Git commit SHA, alongside a machine-readable `metrics.json` of the comparison results.
 
 Locate past run IDs:
 ```powershell
@@ -150,9 +152,13 @@ Captured output:
 Manifest Verification Results
 ========================================
 ✓ PASS: Manifest JSON valid
+✓ PASS: Input dataset: synthetic://deterministic-market-generator
 ✓ PASS: Feature definition: adj_close
 ✓ PASS: Feature definition: momentum_20d
+✓ PASS: Feature definition: sma_50d
+✓ PASS: Feature definition: volatility_20d
 ✓ PASS: Lockfile: requirements.txt
+✓ PASS: Git commit SHA
 ✓ PASS: Manifest run_id derivation
 ========================================
 Overall: PASSED ✓

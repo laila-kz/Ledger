@@ -55,14 +55,23 @@ def build_corrected_features(
     raw_prices: pl.DataFrame,
     splits: pl.DataFrame | None = None,
     feature_names: tuple[str, ...] = DEFAULT_FEATURE_NAMES,
+    additional_feature_views: tuple[pl.DataFrame, ...] = (),
 ) -> pl.DataFrame:
-    """Build corrected features through the Ledger point-in-time engine."""
-    return compute_features_as_of(
+    """Build corrected features through the Ledger point-in-time engine.
+
+    Any ``additional_feature_views`` (fundamentals, filings) are joined with
+    ``join_features_as_of`` so that a record is only visible once it is actually
+    known at the observation timestamp.
+    """
+    features = compute_features_as_of(
         entity_df=observation_matrix,
         feature_names=feature_names,
         prices=raw_prices,
         splits=splits,
     )
+    if not additional_feature_views:
+        return features
+    return join_features_as_of(features, additional_feature_views)
 
 
 def build_leaky_features(
@@ -105,11 +114,27 @@ def run_comparison(
     simulation_config: SimulationConfig | None = None,
     feature_names: tuple[str, ...] = DEFAULT_FEATURE_NAMES,
     leaky_feature_views: tuple[pl.DataFrame, ...] = (),
+    corrected_feature_views: tuple[pl.DataFrame, ...] = (),
     leaky_universe: tuple[str, ...] = LEAKY_STATIC_UNIVERSE,
+    raw_prices_are_preadjusted: bool = False,
 ) -> ComparisonResult:
-    """Run identical strategy/simulation settings against both data pipelines."""
+    """Run identical strategy/simulation settings against both data pipelines.
+
+    ``leaky_feature_views`` are the same raw views handed to the control arm,
+    which stamps them as available at calendar-day start. ``corrected_feature_views``
+    are joined point-in-time. Passing the same frame to both is the honest way to
+    isolate the leak: the only difference is the availability rule.
+
+    ``raw_prices_are_preadjusted`` declares the price basis of ``raw_prices``.
+    When the supplied levels already embed every corporate action (as a vendor
+    ``Close``/``auto_adjust`` feed does, and as this repository's own seeded
+    catalog does), the ex-date ratio is already reflected in them and must not be
+    applied again, so the flag switches the split adjustment off. Leave it
+    ``False`` for genuinely unadjusted prints.
+    """
     strategy = strategy_config or StrategyConfig()
     simulation = simulation_config or SimulationConfig()
+    corrected_splits = None if raw_prices_are_preadjusted else splits
 
     leaky_features = build_leaky_features(
         observation_matrix=observation_matrix,
@@ -123,6 +148,7 @@ def run_comparison(
         raw_prices=raw_prices,
         splits=splits,
         feature_names=feature_names,
+        additional_feature_views=corrected_feature_views,
     )
 
     leaky_weights = generate_target_weights(leaky_features, strategy)
@@ -131,6 +157,10 @@ def run_comparison(
     leaky_result = PipelineResult(
         features=leaky_features,
         weights_history=leaky_weights,
+        # No `splits` here on purpose: the control arm consumes vendor
+        # pre-adjusted levels, which already reflect every corporate action and
+        # are therefore continuous across an ex-date. Applying the ex-date ratio
+        # on top of an already-adjusted series would count the split twice.
         simulation=simulate_portfolio(
             leaky_weights,
             _simulation_prices(leaky_features),
@@ -140,10 +170,16 @@ def run_comparison(
     corrected_result = PipelineResult(
         features=corrected_features,
         weights_history=corrected_weights,
+        # The point-in-time arm stores as-traded levels, so its price series
+        # steps at the ex-date and `splits` restores economic neutrality there.
+        # It marks to `adj_close` because the feature layer already applies the
+        # PIT CAF to that column, and the ex-date step is the single
+        # discontinuity the ratio is there to cancel.
         simulation=simulate_portfolio(
             corrected_weights,
             _simulation_prices(corrected_features),
             simulation,
+            corrected_splits,
         ),
     )
     return ComparisonResult(leaky=leaky_result, corrected=corrected_result)
@@ -204,8 +240,20 @@ def _prepare_leaky_view(view: pl.DataFrame) -> pl.DataFrame:
     return view.with_columns(pl.col("known_from").dt.truncate("1d").alias("known_from"))
 
 
-def _simulation_prices(features: pl.DataFrame) -> pl.DataFrame:
-    required = {"observation_timestamp", "sec_id", "adj_close"}
+def _simulation_prices(
+    features: pl.DataFrame,
+    price_column: str = "adj_close",
+) -> pl.DataFrame:
+    """Select the price series the simulator marks to market.
+
+    The two arms need different columns. The leaky control consumes vendor
+    ``auto_adjust`` levels, which are continuous across an ex-date, so it marks
+    to ``adj_close``. The point-in-time arm stores as-traded prints and corrects
+    the ex-date step with the split ratio, so it must mark to the raw
+    ``close``: pairing the ratio with an already-CAF-adjusted series would apply
+    the same split twice.
+    """
+    required = {"observation_timestamp", "sec_id", price_column}
     missing = sorted(required - set(features.columns))
     if missing:
         raise ValueError(f"Feature output cannot supply simulation prices: {missing}")
@@ -213,7 +261,7 @@ def _simulation_prices(features: pl.DataFrame) -> pl.DataFrame:
         [
             "observation_timestamp",
             "sec_id",
-            pl.col("adj_close").alias("price"),
+            pl.col(price_column).alias("price"),
         ]
     ).drop_nulls("price")
 

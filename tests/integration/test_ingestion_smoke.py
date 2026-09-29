@@ -43,12 +43,14 @@ def test_live_yfinance_ingestion_smoke(tmp_path: Path) -> None:
 
     catalog = LedgerCatalog(base_dir=test_dir)
 
-    # Verify AAPL price on 2020-08-28 is in the expected split-adjusted range (~$124-$127).
-    # NOTE: yfinance >= 0.2 ALWAYS returns split-adjusted prices regardless of auto_adjust.
-    # The pre-split absolute price (~$499) is no longer returned; instead we get the
-    # post-split-adjusted equivalent (~$124.8 = $499.2 / 4). The exact pre-split price
-    # is recoverable as: stored_close × split_ratio (recorded in fact_corporate_actions).
-    # "Unadjusted" in our context = split-adjusted but NOT dividend-adjusted (Close, not Adj Close).
+    # Verify AAPL on 2020-08-28 is stored AS TRADED (~$499), i.e. the true print
+    # from the day before the 2020-08-31 4:1 split.
+    #
+    # yfinance >= 0.2 always returns prices split-adjusted across the FULL
+    # history, so it reports ~$124.81 for this bar -- already divided by a split
+    # that had not yet happened. Ingestion undoes that adjustment, so the raw
+    # table must hold ~$499.23. A value near $125 means look-ahead leaked back
+    # into the store.
     pre_split_df = catalog.query(
         """
         SELECT trade_date, close
@@ -58,10 +60,10 @@ def test_live_yfinance_ingestion_smoke(tmp_path: Path) -> None:
     )
     assert len(pre_split_df) == 1
     close_val = pre_split_df["close"][0]
-    # Post-split AAPL: ~$124-$127 range. Pre-split equivalent: close * 4 ≈ $499.
-    assert 100.0 < close_val < 200.0, (
-        f"Expected split-adjusted AAPL close in range (100, 200), got {close_val}. "
-        f"Note: pre-split equivalent = {close_val * 4:.2f} (close × split_ratio 4.0)"
+    assert 450.0 < close_val < 550.0, (
+        f"Expected as-traded AAPL close in range (450, 550), got {close_val}. "
+        f"A value near 124.8 means the provider's full-history adjustment was "
+        f"stored without being undone, reintroducing look-ahead into the raw table."
     )
 
     # Verify 4:1 split is recorded in fact_corporate_actions

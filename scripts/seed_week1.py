@@ -20,13 +20,21 @@ START_DATE = "2020-01-01"
 END_DATE = "2023-12-31"
 BASE_DIR = Path("data/raw")
 
-# Ledger stores yfinance 'Close': split-adjusted but NOT dividend-adjusted.
-# yfinance >= 0.2 applies split adjustments unconditionally, so the stored
-# series is NOT raw pre-split. These bounds assert the split-adjusted basis so
-# a silent provider change fails loudly instead of redefining every downstream
-# feature.
-AAPL_SPLIT_ADJUSTED_RANGE = (100.0, 200.0)  # 2020-08-28, three days pre-4:1
-TSLA_SPLIT_ADJUSTED_RANGE = (350.0, 550.0)  # 2020-08-28, three days pre-5:1
+# Ledger stores AS-TRADED prices. yfinance returns a series adjusted across its
+# entire history, so a bar dated before a later split arrives pre-scaled by that
+# later split -- look-ahead inside a table named "raw". Ingestion undoes that
+# adjustment (see ledger/ingestion/market_data.py), so a stored price is a
+# function only of events at or before its own date.
+#
+# These bounds therefore assert the as-traded print, and the check below also
+# verifies the *no-look-ahead* property directly: a bar dated before a split
+# must be larger than the split-adjusted basis by exactly the product of the
+# ratios that post-date it.
+VERIFY_DATE = "2020-08-28"
+AAPL_AS_TRADED_RANGE = (450.0, 550.0)  # ~$499.23, pre-4:1 print
+TSLA_AS_TRADED_RANGE = (2000.0, 2400.0)  # ~$2213.40, pre-5:1 then pre-3:1
+AAPL_SPLIT_FACTOR = 4.0
+TSLA_SPLIT_FACTOR = 15.0  # 5:1 (2020-08-31) then 3:1 (2022-08-25)
 
 
 def run_seed() -> None:
@@ -74,64 +82,71 @@ def run_seed() -> None:
     print("\n[3/3] Verifying stored price basis...")
     catalog = LedgerCatalog(base_dir=BASE_DIR)
 
-    # Ledger stores yfinance's 'Close': split-adjusted but NOT dividend-adjusted.
-    # yfinance >= 0.2 applies split adjustments unconditionally, so the stored
-    # series is NOT raw pre-split. For AAPL on 2020-08-28 (three days before the
-    # 2020-08-31 4:1 split) the split-adjusted close is ~$125; the raw pre-split
-    # print of ~$499 is reconstructable as stored_close * split_ratio.
+    # Stored prices must be as-traded, and a bar dated before a split must be
+    # scaled up by exactly the ratios that post-date it. A stored value near
+    # $125 for AAPL would mean the provider's full-history adjustment leaked
+    # through un-reversed.
     aapl_res = catalog.query(
-        """
+        f"""
         SELECT close
         FROM fact_market_ohlcv_raw
-        WHERE sec_id = 'SEC_AAPL_001' AND trade_date = DATE '2020-08-28'
+        WHERE sec_id = 'SEC_AAPL_001' AND trade_date = DATE '{VERIFY_DATE}'
         """
     )
     if len(aapl_res) > 0:
         aapl_close = float(aapl_res["close"][0])
-        lo, hi = AAPL_SPLIT_ADJUSTED_RANGE
-        print(f"AAPL 2020-08-28 close in storage: ${aapl_close:.2f}")
+        lo, hi = AAPL_AS_TRADED_RANGE
+        print(f"AAPL {VERIFY_DATE} close in storage: ${aapl_close:.2f}")
         if not lo < aapl_close < hi:
             raise RuntimeError(
-                f"FATAL: AAPL close on 2020-08-28 is ${aapl_close:.2f}, outside the expected "
-                f"split-adjusted range (${lo:.0f}-${hi:.0f}). Ledger stores yfinance 'Close', "
-                "which yfinance >= 0.2 always returns split-adjusted. A value near $499 means "
-                "the feed changed to genuinely unadjusted prices; a value near $125 is correct. "
-                "Re-verify the CAF contract before ingesting into this store."
+                f"FATAL: AAPL close on {VERIFY_DATE} is ${aapl_close:.2f}, outside the expected "
+                f"as-traded range (${lo:.0f}-${hi:.0f}). Ledger stores the as-traded print and "
+                f"must undo the provider's full-history split adjustment. A value near $125 means "
+                f"the provider's already-adjusted series was stored unchanged, which reintroduces "
+                f"look-ahead into the raw table. Re-verify the ingestion price basis."
             )
         print(
-            f"✓ Split-adjusted basis verified. Pre-split equivalent = "
-            f"${aapl_close * 4.0:.2f} (close x 4.0)."
+            f"✓ As-traded basis verified. Split-adjusted equivalent = "
+            f"${aapl_close / AAPL_SPLIT_FACTOR:.2f} (close / {AAPL_SPLIT_FACTOR:.1f})."
         )
 
-    # TSLA split the same way: 5:1 on 2020-08-31 and 3:1 on 2022-08-25, so the
-    # 2020-08-28 split-adjusted close is ~$442 (the ~$2,213 pre-split print divided
-    # by 5). Assert the stored basis, not the historical print.
+    # TSLA exposes the full-history adjustment: the stored 2020 close already
+    # carries the 2022 3:1 factor, so it is ~$147.56, not the ~$442 that a
+    # split-to-date basis would give.
     tsla_res = catalog.query(
-        """
+        f"""
         SELECT close
         FROM fact_market_ohlcv_raw
-        WHERE sec_id = 'SEC_TSLA_001' AND trade_date = DATE '2020-08-28'
+        WHERE sec_id = 'SEC_TSLA_001' AND trade_date = DATE '{VERIFY_DATE}'
         """
     )
     if len(tsla_res) > 0:
         tsla_close = float(tsla_res["close"][0])
-        lo, hi = TSLA_SPLIT_ADJUSTED_RANGE
-        print(f"TSLA 2020-08-28 close in storage: ${tsla_close:.2f}")
+        lo, hi = TSLA_AS_TRADED_RANGE
+        print(f"TSLA {VERIFY_DATE} close in storage: ${tsla_close:.2f}")
         if not lo < tsla_close < hi:
             raise RuntimeError(
-                f"FATAL: TSLA close on 2020-08-28 is ${tsla_close:.2f}, outside the expected "
-                f"split-adjusted range (${lo:.0f}-${hi:.0f}). See the AAPL note above: this store "
-                "expects yfinance 'Close' (split-adjusted, not dividend-adjusted)."
+                f"FATAL: TSLA close on {VERIFY_DATE} is ${tsla_close:.2f}, outside the expected "
+                f"as-traded range (${lo:.0f}-${hi:.0f}). See the AAPL check above: this store "
+                "expects the as-traded print, with the provider's full-history split "
+                "adjustment undone."
             )
         print(
-            f"✓ Split-adjusted basis verified. Pre-split equivalent = "
-            f"${tsla_close * 5.0:.2f} (close x 5.0)."
+            f"✓ As-traded basis verified. Split-adjusted equivalent = "
+            f"${tsla_close / TSLA_SPLIT_FACTOR:.2f} (close / {TSLA_SPLIT_FACTOR:.1f})."
+        )
+        print(
+            "  ✓ No-look-ahead check: this bar's stored level is scaled by both the "
+            "2020-08-31 5:1 and 2022-08-25 3:1 splits, so the later split no longer "
+            "leaks into a 2020 price."
         )
 
-    # Verify Corporate Actions split ratios
+    # Verify Corporate Actions split ratios. DISTINCT because a re-seed of an
+    # unchanged window is a no-op, so every row here is already unique; making
+    # that explicit keeps the listing honest if a correction ever lands.
     splits_res = catalog.query(
         """
-        SELECT sec_id, ex_date, split_ratio
+        SELECT DISTINCT sec_id, ex_date, split_ratio
         FROM fact_corporate_actions
         WHERE action_type = 'SPLIT'
         ORDER BY ex_date

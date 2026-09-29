@@ -1,9 +1,14 @@
 """Market data ingestion pipeline for raw daily OHLCV bars.
 
 Critical Invariants:
-1. Prices stored are split-adjusted but NOT dividend-adjusted (i.e., the 'Close' column
-   from yfinance, not 'Adj Close'). yfinance >= 0.2 always applies split adjustments;
-   pre-split absolute prices are reconstructable via the split_ratio in fact_corporate_actions.
+1. Prices are stored **as traded**, i.e. the unadjusted historical print. yfinance
+   returns a series split-adjusted over its *entire* history, so a row dated
+   before a later split arrives pre-scaled by that later split. That is
+   look-ahead sitting in a table named "raw", and it is the precise defect this
+   project exists to prevent. `_undo_full_history_split_adjustment` reverses the
+   adjustment using the split history, so a stored price depends only on events
+   at or before its own date. See ADR 006 and the `raw` price-basis invariant in
+   `tests/unit/test_ingestion.py`.
 2. Tickers are mapped to synthetic permanent `sec_id` (SEC_<TICKER>_001).
 3. `known_from` is computed via exchange calendar session close + 15 min buffer (16:15 EST).
 4. Atomic Parquet writing and monotonic `ingestion_seq` audit logging.
@@ -14,7 +19,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 from collections.abc import Sequence
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +40,79 @@ def _extract_date(dt_val: Any) -> date:
     if isinstance(dt_val, date):
         return dt_val
     return pd.to_datetime(str(dt_val)).date()
+
+
+def _undo_full_history_split_adjustment(
+    df: pl.DataFrame,
+    splits: pl.DataFrame | None,
+) -> pl.DataFrame:
+    """Restore as-traded price levels by undoing the provider's full-history adjustment.
+
+    yfinance returns a price series scaled so that *every* bar is expressed in
+    current-share terms. The scale factor applied to a bar dated ``t`` is the
+    product of every split ratio whose ex-date is strictly after ``t``. TSLA on
+    2020-08-28 is the worked example: the true print was ~$2,213, but the
+    provider returns 2213 / 5 (2020-08-31) / 3 (2022-08-25) = 147.56, so the
+    2022 split is embedded in a 2020 row.
+
+    Multiplying each bar back by its own factor restores the as-traded level:
+
+        as_traded[t] = provider[t] * prod(ratio for splits with ex_date > t)
+
+    This makes a stored price a function only of events at or before ``t``, which
+    is what a point-in-time store requires. The adjusted series is still
+    recoverable, and is what the dynamic CAF feature recomputes from the split
+    table at query time.
+
+    Volume is deliberately left alone: the provider already reports volume in
+    as-traded share units (no step appears across an ex-date), so rescaling it
+    here would corrupt it.
+    """
+    if splits is None or splits.is_empty():
+        return df
+
+    price_columns = ["open", "high", "low", "close"]
+    if not set(price_columns).issubset(df.columns):
+        return df
+
+    unique_splits = splits.select(["sec_id", "ex_date", "split_ratio"]).unique(
+        subset=["sec_id", "ex_date", "split_ratio"]
+    )
+
+    out: list[pl.DataFrame] = []
+    for sec_key, group in df.group_by("sec_id", maintain_order=True):
+        # Polars yields the grouping key as a 1-tuple; unwrap it so the
+        # comparison below is against a scalar rather than a list.
+        sec_id = sec_key[0] if isinstance(sec_key, tuple) else sec_key
+        sec_splits = unique_splits.filter(pl.col("sec_id") == sec_id)
+        if sec_splits.is_empty():
+            out.append(group)
+            continue
+        # ex_dates strictly after each trade_date, as a running product.
+        factors = (
+            group.select("trade_date")
+            .join(
+                sec_splits.rename({"ex_date": "__ex_date"}),
+                how="cross",
+            )
+            .with_columns(
+                pl.when(pl.col("__ex_date") > pl.col("trade_date"))
+                .then(pl.col("split_ratio"))
+                .otherwise(1.0)
+                .alias("__factor")
+            )
+            .group_by("trade_date", maintain_order=True)
+            .agg(pl.col("__factor").product().alias("__factor"))
+        )
+        out.append(
+            group.join(factors, on="trade_date", how="left")
+            .with_columns(
+                [pl.col(col).cast(pl.Float64) * pl.col("__factor") for col in price_columns]
+            )
+            .drop("__factor")
+        )
+
+    return pl.concat(out, how="vertical")
 
 
 class TickerRegistry:
@@ -93,12 +171,17 @@ def parse_yfinance_ohlcv_dataframe(
     ticker: str,
     sec_id: str,
     ingestion_seq: int,
+    splits: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """Parse raw yfinance DataFrame into canonical fact_market_ohlcv_raw schema.
 
-    Enforces:
-    - Strictly unadjusted Open, High, Low, Close, Volume.
-    - Computes `known_from` timestamp using exchange session close + buffer.
+    Computes `known_from` timestamp using exchange session close + buffer.
+
+    Price basis: stored levels are **as traded**, not the provider's
+    full-history-adjusted series. ``splits`` must carry the security's split
+    history so the provider's adjustment can be undone; without it the function
+    would store a price that already embeds later corporate actions. See
+    `_undo_full_history_split_adjustment` and the module docstring.
     """
     if raw_df.empty:
         return pl.DataFrame(
@@ -128,8 +211,17 @@ def parse_yfinance_ohlcv_dataframe(
     for dt_index, row in df.iterrows():
         trade_d = _extract_date(dt_index)
 
-        # Compute actionable timestamp: 16:15 EST on trade_d converted to UTC
-        trade_dt = datetime.combine(trade_d, datetime.min.time())
+        # Actionable timestamp: session close + buffer on trade_d, in UTC.
+        #
+        # Anchor at midday New York, NOT naive midnight. `_to_ny_datetime`
+        # treats a naive value as UTC, so midnight on trade_d converts to
+        # 20:00 the PREVIOUS day in New York. The calendar then sees a
+        # non-session date and walks back to the previous session close,
+        # stamping every bar a session early. For 2020-08-31 that meant
+        # known_from = 2020-08-28 20:15 UTC, which made the 4:1 ex-date bar
+        # visible a full session before it printed -- look-ahead, and enough
+        # to shift the ex-date pairing in the simulator.
+        trade_dt = datetime.combine(trade_d, time(hour=12))
         actionable_ny = get_actionable_timestamp(trade_dt, is_market_data=True)
         known_from_utc = actionable_ny.astimezone(timezone.utc)
 
@@ -153,7 +245,7 @@ def parse_yfinance_ohlcv_dataframe(
             }
         )
 
-    return pl.DataFrame(
+    out = pl.DataFrame(
         records,
         schema={
             "sec_id": pl.Utf8,
@@ -167,6 +259,7 @@ def parse_yfinance_ohlcv_dataframe(
             "ingestion_seq": pl.Int64,
         },
     )
+    return _undo_full_history_split_adjustment(out, splits)
 
 
 def ingest_ohlcv(
@@ -212,11 +305,11 @@ def ingest_ohlcv(
         sec_id = reg.get_or_create_sec_id(clean_ticker)
 
         # Use Ticker.history() for reliable single-ticker OHLCV retrieval.
-        # auto_adjust=False: returns 'Close' (split-adjusted, NOT dividend-adjusted)
-        # and 'Adj Close' (fully adjusted). We store 'Close' only.
-        # NOTE: yfinance >= 0.2 always applies split adjustments regardless of flags;
-        # this is the canonical split-adjusted price. Splits are tracked separately
-        # in fact_corporate_actions so the pre-split price is always recoverable.
+        # auto_adjust=False yields 'Close' (split-adjusted over the FULL history,
+        # not dividend-adjusted) and 'Adj Close' (split + dividend adjusted).
+        # We read 'Close' and then undo its split adjustment, because the
+        # full-history basis embeds splits that post-date the bar -- look-ahead
+        # in a table named "raw".
         t_obj = yf.Ticker(clean_ticker)
         history_kwargs: dict[str, Any] = {
             "start": start_str,
@@ -227,6 +320,24 @@ def ingest_ohlcv(
         if end_str:
             history_kwargs["end"] = end_str
 
+        # The FULL split history is required here, including splits after
+        # end_date: those are exactly the factors the provider has already
+        # baked into the bars we are about to download.
+        history_splits = t_obj.splits
+        split_df: pl.DataFrame | None = None
+        if history_splits is not None and not history_splits.empty:
+            split_df = pl.DataFrame(
+                {
+                    "sec_id": pl.Series([sec_id] * len(history_splits), dtype=pl.String),
+                    "ex_date": pl.Series(
+                        [_extract_date(i) for i in history_splits.index], dtype=pl.Date
+                    ),
+                    "split_ratio": pl.Series(
+                        [float(v) for v in history_splits.to_numpy()], dtype=pl.Float64
+                    ),
+                }
+            )
+
         raw_df = t_obj.history(**history_kwargs)
         if raw_df is not None and not raw_df.empty:
             parsed_df = parse_yfinance_ohlcv_dataframe(
@@ -234,6 +345,7 @@ def ingest_ohlcv(
                 ticker=clean_ticker,
                 sec_id=sec_id,
                 ingestion_seq=ingestion_seq,
+                splits=split_df,
             )
             if len(parsed_df) > 0:
                 all_dfs.append(parsed_df)

@@ -83,9 +83,47 @@ class TestAdjustedCloseFeature:
         ctx = FeatureContext(prices=prices, splits=splits)
 
         result = compute_adj_close(ctx)
-        # Pre-split 500.0 unadjusted becomes 500.0 * 0.25 = 125.0 in backward-adjusted terms
-        # and 125.0 becomes 125.0 * 1.0 = 125.0
-        assert result["adj_close"].to_list() == [125.0, 125.0, 125.0, 130.0]
+        # Point-in-time contract: a price is adjusted only by splits already
+        # announced when that price was confirmed. The 4:1 split is announced
+        # 2020-08-31 20:15, so the 08-27 and 08-28 closes -- confirmed a day
+        # earlier -- must NOT be rescaled. Rescaling them would fold a future
+        # corporate action into decisions that predate it.
+        assert result["adj_close"].to_list() == [500.0, 500.0, 125.0, 130.0]
+
+    def test_adj_close_applies_split_announced_before_price_confirmation(self) -> None:
+        """The mirror case: once a split is public, older prices are adjusted.
+
+        This is what makes the feature useful rather than merely conservative.
+        A price dated before the ex-date but confirmed *after* the announcement
+        is genuinely knowable-and-adjustable, so the split must apply to it.
+        """
+        prices = pl.DataFrame(
+            {
+                "sec_id": ["SEC_AAPL_001"] * 3,
+                "trade_date": [date(2020, 8, 27), date(2020, 8, 28), date(2020, 8, 31)],
+                "close": [500.0, 500.0, 125.0],
+                "known_from": [
+                    datetime(2020, 8, 27, 21, 0, tzinfo=UTC),
+                    datetime(2020, 8, 31, 22, 0, tzinfo=UTC),
+                    datetime(2020, 8, 31, 22, 0, tzinfo=UTC),
+                ],
+            }
+        )
+        splits = pl.DataFrame(
+            {
+                "sec_id": ["SEC_AAPL_001"],
+                "ex_date": [date(2020, 8, 31)],
+                "split_ratio": [4.0],
+                "known_from": [datetime(2020, 8, 31, 20, 15, tzinfo=UTC)],
+            }
+        )
+        ctx = FeatureContext(prices=prices, splits=splits)
+
+        result = compute_adj_close(ctx)
+        # 08-27 confirmed before the announcement -> untouched.
+        # 08-28 dated before the ex-date but confirmed after it -> 500 / 4.
+        # 08-31 is the ex-date itself -> not adjusted.
+        assert result["adj_close"].to_list() == [500.0, 125.0, 125.0]
 
 
 # =============================================================================
