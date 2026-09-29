@@ -240,7 +240,7 @@ docker compose run --rm comparison
 
 Use this minute-by-minute transcript and visual guide when recording or presenting your demo video.
 
-> 📽️ **Recorded Video Asset:** [`docs/screenshots/Start-to-End-Demo-Run.mp4`](docs/screenshots/Start-to-End-Demo-Run.mp4)
+> 📽️ **Recorded Video Asset:** not in the repository. `docs/screenshots/Start-to-End-Demo-Run.mp4` is excluded by the `*.mp4` rule in `.gitignore`, because a demo recording is a few tens of MB of binary that changes on every take. Record it fresh from this transcript; the only tracked images in that directory are `Report-1.png` and `Report-2.png`.
 
 | Page 1: Institutional Performance Tear-Sheet | Page 2: Formal Verification & Lineage Certificate |
 |:-------------------------------------------:|:-------------------------------------------------:|

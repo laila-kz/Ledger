@@ -35,7 +35,7 @@ We must define a deterministic, conservative convention for corporate action tim
 1. **Conservative No-Leakage Guarantee:**
    * A stock split with `ex_date = 2020-08-31` receives `known_from = 2020-08-31T20:15:00Z` (16:15 EDT).
    * Backtesting queries evaluated *prior* to `2020-08-31T20:15:00Z` (e.g. July 2020 or August 2020 pre-market) see strictly unadjusted prices with Cumulative Adjustment Factor $\text{CAF} = 1.0$.
-   * Backtesting queries evaluated *after* `2020-08-31T20:15:00Z` dynamically compute $\text{CAF} = 4.0$ across historical prices.
+   * Backtesting queries evaluated *after* `2020-08-31T20:15:00Z` dynamically compute $\text{CAF} = 1 / \text{split\_ratio} = 1/4 = 0.25$ across historical prices. The factor divides out the split, so a July 2020 print stored at $400 is compared at $100. A value of `4.0` here would multiply the historical price and invert the adjustment.
 
 2. **Decoupled Physical Storage:**
    * Price bars (`fact_market_ohlcv_raw`) and corporate actions (`fact_corporate_actions`) are stored in separate, immutable Parquet partitions.

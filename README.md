@@ -68,7 +68,9 @@ Manifest: artifacts/runs/638e1937b1d9db50/manifest.json
 ```
 
 Note on Synthetic Generator Properties:
-The synthetic dataset generator (`generate_synthetic_data` in `ledger/backtest/synthetic.py`) builds a deterministic, seeded geometric-Brownian-motion price path (Itô-corrected drift) with a single 4:1 forward split at the date midpoint, emitted three ways: true as-traded OHLCV, a vendor pre-adjusted close series that already reflects every future split, and the split record. The leaky pipeline reads the pre-adjusted close while ignoring the split factor, so it double-counts the split: the unadjusted 4x level jump inflates cumulative return (+46.64% vs +30.70%) and the Sharpe ratio (+0.56 vs +0.42) against a realistic, non-zero market drawdown. The point-in-time pipeline instead reconstructs as-traded levels on ingest and applies the CAF matrix across the split boundary, so both arms observe the same economic price path and the only difference is the leak. Because the generator is seeded, these figures reproduce on every run; the run ID varies per invocation.
+The synthetic dataset generator (`generate_synthetic_data` in `ledger/backtest/synthetic.py`) builds a deterministic, seeded geometric-Brownian-motion price path (Itô-corrected drift) with a single 4:1 forward split at the date midpoint, emitted three ways: true as-traded OHLCV, a vendor pre-adjusted close series that already reflects every future split, and the split record. Pre-split closes are 4x the post-split economic level, so the as-traded series steps *down* by 4x at the midpoint while the pre-adjusted series is smooth across it.
+
+The leaky pipeline reads the pre-adjusted close and ignores the split factor entirely, so it never sees that level change. The point-in-time pipeline reconstructs as-traded levels on ingest and applies the CAF matrix across the split boundary, dividing out the 4:1 ratio. The leaky arm therefore trades on a return series that disagrees with the real one about what happened at the split, which inflates cumulative return (+46.64% vs +30.70%) and Sharpe (+0.56 vs +0.42) while leaving max drawdown at -28.29% in both arms — the leak makes the strategy look better, not merely different. Because the generator is seeded, these figures reproduce on every run; the run ID varies per invocation.
 
 ### Static AST Leakage Detection
 
@@ -112,7 +114,7 @@ ledger canaries
 
 Captured output:
 ```text
-============================= 16 passed in 2.49s ==============================
+============================= 16 passed in 3.80s ==============================
 ```
 
 The canary suite consists of 16 tests across 8 files:
@@ -122,8 +124,10 @@ The canary suite consists of 16 tests across 8 files:
 - `canary_04_survivorship_universe`: Verifies that delisted entities remain visible in historical universe queries prior to delisting.
 - `canary_05_filing_lag_window`: Verifies that fiscal quarter fundamentals are hidden during the lag period before public release.
 - `canary_06_ticker_relabeling`: Verifies continuous identity tracking when ticker symbols change (e.g. FB to META).
-- `canary_07_synthetic_demo_sanity`: Six tests over the synthetic demo asserting that the leaky arm out-returns and out-Sharpes the corrected arm, that removing the injected leak makes the two arms identical, and that the reported Sharpe stays within a plausible range.
+- `canary_07_synthetic_demo_sanity`: Five tests over the synthetic demo asserting that the leaky arm out-returns and out-Sharpes the corrected arm, that removing the injected leak makes the two arms identical, that the reported Sharpe stays within a plausible range, and that the corrected Sharpe remains positive.
 - `test_harness_self_test`: Three tests asserting that deliberate lookahead patterns injected into the test harness trigger canary failures.
+
+Every test name, count, and figure in this repository is recorded with its verification method in [docs/CLAIMS.md](docs/CLAIMS.md). A claim may only appear here if it has a row there.
 
 ### Design Trade-Offs
 
