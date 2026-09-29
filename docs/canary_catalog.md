@@ -23,7 +23,7 @@ Each canary tests a specific class of look-ahead bias that can silently corrupt 
 | `test_canary_04_survivorship_universe.py` | 1 | leakage mode |
 | `test_canary_05_filing_lag_window.py` | 1 | leakage mode |
 | `test_canary_06_ticker_relabeling.py` | 1 | leakage mode |
-| `test_canary_07_synthetic_demo_sanity.py` | 5 | end-to-end demo invariants, not a leakage mode |
+| `test_canary_07_synthetic_demo_sanity.py` | 6 | end-to-end demo invariants, not a leakage mode |
 | `test_harness_self_test.py` | 3 | self-tests of the canary harness itself |
 | **Total** | **16** | |
 

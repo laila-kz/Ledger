@@ -70,12 +70,22 @@ why it mattered for the integrity guarantees described in the README.
 
 - `ledger lint` accepts a single script and raises `PermissionError` when
   given a directory.
-- `docs/canary_catalog.md` still documents 10 canaries; the suite has 16.
-- `README.md` describes a 4x level jump where the real 2020-08-31 AAPL 4:1
-  split produces a 4.2x move.
-- `docs/adr/005-corporate-action-known-from-convention.md` still states
-  `CAF = 4.0`.
-- `ledger/backtest/runner.py` carries a stale docstring referring to
-  pre-adjusted catalogs.
-- No `LICENSE` file.
-- ADR files are numbered both `0001`-style and `001`-style.
+- `engine.py:310` emits a Polars sortedness `UserWarning` on direct CLI
+  invocations (e.g. `python benchmarks/scale_probe.py`). Suppressed only
+  under pytest via `filterwarnings` in `pyproject.toml`.
+
+### Closed in follow-up pass (commit 21dd1a1)
+
+Items that appeared in the previous "Known issues" list and were fixed in the
+accuracy pass immediately after this entry was written:
+
+- `docs/canary_catalog.md` documented 10 canaries — corrected to 16 real
+  tests, all names sourced from `pytest --collect-only`.
+- `README.md` described a 4x level jump upward — corrected: the as-traded
+  series steps *down* by 4x; the leaky arm reads the pre-adjusted series.
+- `docs/adr/005` stated `CAF = 4.0` — corrected to `1 / split_ratio = 0.25`.
+- `ledger/backtest/runner.py` had a stale docstring — corrected: seeded
+  catalog is as-traded; the flag is for vendor feeds.
+- No `LICENSE` file — MIT license added.
+- ADR files mixed `0001`-style and `001`-style — unified to a single 3-digit
+  series: 0001–0005 became 017–021; EMA-seeding ADR took 008.

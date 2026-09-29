@@ -1,4 +1,4 @@
-# ADR-0003: Hash-Verified Lineage Manifest & Deterministic Replay
+# ADR-019: Hash-Verified Lineage Manifest & Deterministic Replay
 
 * **Status:** Accepted
 * **Date:** 2026-09-14

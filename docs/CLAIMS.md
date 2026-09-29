@@ -67,9 +67,10 @@ do not exist in the codebase. The actual canary-05 test is
 `test_filing_lag_prevents_prior_quarter_leakage`. The catalog now lists only
 names that `pytest --collect-only` reports.
 
-`WAR_LOG.md` still contains "all 10 tests" in two places. Those are dated
-historical entries describing a run at the time, and rewriting them would falsify
-the record. The log is not user-facing documentation of current state.
+`docs/history/WAR_LOG.md` still contains "all 10 tests" in two places. Those are
+dated historical entries describing a run at the time, and rewriting them would
+falsify the record. The log is archived, not user-facing documentation of
+current state.
 
 ---
 
@@ -223,15 +224,16 @@ still have passed the 100 ms budget.
 | `docs/adr/005` | `CAF = 4.0` | **Fixed** — `1 / split_ratio = 0.25`. |
 | `README.md` | "unadjusted 4x level jump" inflating returns | **Fixed** — the step is downward, and the leaky arm reads pre-adjusted prices. |
 | `ledger/backtest/runner.py` | Seeded catalog is pre-adjusted | **Fixed** — it is as-traded; the flag is for vendor feeds. |
-| `Fix_Plan.md` | Polars warning "✅ Verified Fixed" | **Fixed** — downgraded to partial, with the pytest-vs-CLI distinction documented. |
+| `docs/history/FIX_PLAN_SUPERSEDED.md` | Polars warning "✅ Verified Fixed" | **Fixed** — downgraded to partial, with the pytest-vs-CLI distinction documented. |
 | `DEMO_RUNBOOK.md` | Link to gitignored `.mp4` | **Fixed** — link removed, explanation retained. |
 | `README.md`, `docs/ml_feature_store_architecture.md` | "Cryptographic manifest", "full regulatory compliance" | **Fixed** — renamed to hash manifest; the unsigned limitation is stated. |
 | `docs/canary_catalog.md` | "under 2 seconds" | **Corrected** — ~4s. |
-| `Fix_Plan.md` | `uv.lock` missing while referenced in ADRs | Open. |
-| Repository | No `LICENSE` | Open. |
-| `docs/adr/` | Dual numbering schemes | Open. |
+| Repository | No `LICENSE` | **Fixed** — MIT, matching the `license` field already in `pyproject.toml`. |
+| `docs/adr/` | Two numbering schemes, and two files both numbered 007 | **Fixed** — single 3-digit series. The 0001–0005 set became 017–021; the EMA-seeding ADR took 008, freeing 007 for the feature registry. |
+| `WAR_LOG.md`, `Fix_Plan.md` | Stale, root-level, unindexed | **Fixed** — archived to `docs/history/` with a README explaining what they are and where current state lives. |
+| `docs/history/FIX_PLAN_SUPERSEDED.md` | `uv.lock` missing while referenced in ADRs | Open. |
 | `ledger lint <directory>` | Raises `PermissionError` | Open. Single-file only. |
-| `engine.py:310` | Polars sortedness warning | Open outside pytest. See `Fix_Plan.md`. |
+| `engine.py:310` | Polars sortedness warning | Open outside pytest. See `docs/history/FIX_PLAN_SUPERSEDED.md`. |
 
 ---
 

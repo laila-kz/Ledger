@@ -112,7 +112,10 @@ timing measurements. Standalone scripts measure net algorithm latency.
   runs on every CI push. If it fails on CI (which runs slower hardware), the
   threshold must be revisited via a new ADR rather than silently raised.
 - **Future baselines**: When Week 3 adds the fundamental feature views (P/E, EPS),
-  the ASOF join benchmark must be re-run and results updated in `WAR_LOG.md`.
+  the ASOF join benchmark must be re-run and results updated in
+  `docs/CLAIMS.md` §7, which is where current benchmark numbers are recorded.
+  (`WAR_LOG.md` was the original target for this; it is now archived under
+  `docs/history/` and is not a statement of current state.)
 - **Arrow version pinning**: Zero-copy buffer sharing relies on Polars and
   PyArrow using the same Arrow ABI. `pyproject.toml` pins `pyarrow>=17.0` to
   ensure compatibility. If Polars drops direct PyArrow buffer sharing in a

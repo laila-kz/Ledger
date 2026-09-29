@@ -67,11 +67,11 @@
    - Test detection across all 4 rules with paired positive (leaky) and negative (compliant) test fixtures.
 
 ### Day 5: 4 Architecture Decision Records (ADRs), Repo Polish & Interview Rehearsal
-1. **Write the 4 Core ADRs in `docs/adr/` (written post-implementation for maximum technical precision):**
-   - **`0001-bitemporal-interval-model.md`:** Explains Valid Time vs. Transaction Time, append-only raw storage, and why `known_to` is derived via `LEAD()` rather than stored.
-   - **`0002-duckdb-polars-asof-engine.md`:** Compares Feast vs. custom DuckDB/Polars ASOF engine for historical backtesting.
-   - **`0003-hash-verified-manifest.md`:** Explains content-addressable SHA-256 data snapshots, environment lockfiles, and Git SHA tracking for deterministic backtest replay.
-   - **`0004-static-ast-vs-runtime-canary-leakage-detection.md`:** Explains static AST analysis vs. dynamic runtime canaries (pre-execution syntax linting vs. runtime invariant enforcement, what each catches, and why defense-in-depth is necessary).
+1. **Write the 4 Core ADRs in `docs/adr/` (written post-implementation for maximum technical precision).** These were originally filed as `0001`–`0004` and have since been renumbered to continue the main series; the current filenames are:
+   - **`017-bitemporal-interval-model.md`:** Explains Valid Time vs. Transaction Time, append-only raw storage, and why `known_to` is derived via `LEAD()` rather than stored.
+   - **`018-duckdb-polars-asof-engine.md`:** Compares Feast vs. custom DuckDB/Polars ASOF engine for historical backtesting.
+   - **`019-hash-verified-manifest.md`:** Explains content-addressable SHA-256 data snapshots, environment lockfiles, and Git SHA tracking for deterministic backtest replay.
+   - **`020-static-ast-vs-runtime-canary-leakage-detection.md`:** Explains static AST analysis vs. dynamic runtime canaries (pre-execution syntax linting vs. runtime invariant enforcement, what each catches, and why defense-in-depth is necessary).
 2. **Repository Hygiene:**
    - Remove temporary scratch files, check `.gitignore` ignores `/data/*.parquet` and cache directories.
    - Run a clean clone test in a fresh virtual environment:

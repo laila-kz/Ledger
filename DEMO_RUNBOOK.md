@@ -44,16 +44,16 @@ Verify that all linters, strict type checkers, unit tests, and property fuzzing 
 .\.venv\Scripts\ruff check .
 
 # 2. Check strict type safety
-.\.venv\Scripts\mypy ledger
+.\.venv\Scripts\mypy .
 
-# 3. Run full test suite (215 unit, canary, & hypothesis property tests)
+# 3. Run full test suite (226 unit, canary, & hypothesis property tests)
 .\.venv\Scripts\pytest
 ```
 
 **Expected Result:**
 - `ruff check`: `All checks passed!`
-- `mypy`: `Success: no issues found in 40 source files`
-- `pytest`: `215 passed, 1 deselected`
+- `mypy`: `Success: no issues found in 88 source files`
+- `pytest`: `226 passed, 1 deselected`
 
 ---
 

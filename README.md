@@ -98,7 +98,7 @@ pytest
 
 Captured output:
 ```text
-===================== 215 passed, 1 deselected in 25.99s ======================
+===================== 226 passed, 1 deselected in 54.69s ======================
 ```
 
 Note on Deselected Test:
@@ -124,7 +124,7 @@ The canary suite consists of 16 tests across 8 files:
 - `canary_04_survivorship_universe`: Verifies that delisted entities remain visible in historical universe queries prior to delisting.
 - `canary_05_filing_lag_window`: Verifies that fiscal quarter fundamentals are hidden during the lag period before public release.
 - `canary_06_ticker_relabeling`: Verifies continuous identity tracking when ticker symbols change (e.g. FB to META).
-- `canary_07_synthetic_demo_sanity`: Five tests over the synthetic demo asserting that the leaky arm out-returns and out-Sharpes the corrected arm, that removing the injected leak makes the two arms identical, that the reported Sharpe stays within a plausible range, and that the corrected Sharpe remains positive.
+- `canary_07_synthetic_demo_sanity`: Six tests over the synthetic demo asserting that the leaky arm out-returns and out-Sharpes the corrected arm, that removing the injected leak makes the two arms identical, that the reported Sharpe stays within a plausible range, and that the corrected Sharpe remains positive.
 - `test_harness_self_test`: Three tests asserting that deliberate lookahead patterns injected into the test harness trigger canary failures.
 
 Every test name, count, and figure in this repository is recorded with its verification method in [docs/CLAIMS.md](docs/CLAIMS.md). A claim may only appear here if it has a row there.

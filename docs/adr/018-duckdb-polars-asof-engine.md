@@ -1,4 +1,4 @@
-# ADR-0002: Custom DuckDB/Polars ASOF Engine vs. Generic Feature Stores (Feast)
+# ADR-018: Custom DuckDB/Polars ASOF Engine vs. Generic Feature Stores (Feast)
 
 * **Status:** Accepted
 * **Date:** 2026-09-14

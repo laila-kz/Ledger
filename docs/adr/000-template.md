@@ -1,4 +1,11 @@
-# [ADR-000] Title: [Short Sentence Describing the Decision]
+# ADR-NNN: [Short Sentence Describing the Decision]
+
+Numbering: three digits, zero-padded, matching the existing series in this
+directory. The next free number is **022**; the 011-013 range is deliberately
+unallocated. Do not renumber existing ADRs to close gaps — a superseded number
+is worse than a hole, because links and commit messages reference the number a
+decision was filed under. If you withdraw an ADR, mark it Superseded in place
+and leave the file.
 
 * **Status:** [Proposed | Accepted | Superseded | Deprecated]
 * **Date:** YYYY-MM-DD
