@@ -39,12 +39,13 @@ seed is changed, re-run this test to verify invariants still hold.
 """
 
 from datetime import date, datetime, timezone
+from typing import Any
 
 import polars as pl
 import pytest
 
-from ledger.backtest.metrics import TRADING_DAYS_PER_YEAR, compute_metrics
-from ledger.backtest.runner import run_comparison
+from ledger.backtest.metrics import TRADING_DAYS_PER_YEAR, Metrics, compute_metrics
+from ledger.backtest.runner import ComparisonResult, run_comparison
 from ledger.backtest.simulation import SimulationConfig
 from ledger.backtest.strategy import StrategyConfig
 from ledger.backtest.synthetic import (
@@ -87,11 +88,11 @@ def _build_observations(raw_prices: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def _run(*, inject_leak: bool):
+def _run(*, inject_leak: bool) -> ComparisonResult:
     raw_prices, preadjusted, splits, fundamentals = generate_synthetic_data(_SEC_IDS, _START, _END)
     observations = _build_observations(raw_prices)
 
-    kwargs: dict = {}
+    kwargs: dict[str, Any] = {}
     if inject_leak:
         # Both arms receive the same fundamentals frame; only the availability
         # rule differs. The screen is shared, so both arms must have the
@@ -116,26 +117,26 @@ def _run(*, inject_leak: bool):
 
 
 @pytest.fixture(scope="module")
-def comparison_result():
+def comparison_result() -> ComparisonResult:
     """Full synthetic demo comparison with the restatement leak injected."""
     return _run(inject_leak=True)
 
 
 @pytest.fixture(scope="module")
-def no_leak_result():
+def no_leak_result() -> ComparisonResult:
     """Same fixture with no leak injected: the controlled baseline."""
     return _run(inject_leak=False)
 
 
 @pytest.fixture(scope="module")
-def leaky_metrics(comparison_result):
+def leaky_metrics(comparison_result: ComparisonResult) -> Metrics:
     return compute_metrics(
         comparison_result.leaky.simulation, periods_per_year=TRADING_DAYS_PER_YEAR
     )
 
 
 @pytest.fixture(scope="module")
-def corrected_metrics(comparison_result):
+def corrected_metrics(comparison_result: ComparisonResult) -> Metrics:
     return compute_metrics(
         comparison_result.corrected.simulation, periods_per_year=TRADING_DAYS_PER_YEAR
     )
@@ -144,7 +145,7 @@ def corrected_metrics(comparison_result):
 # ---------------------------------------------------------------------------
 # Invariant 0: the canary is not vacuous
 # ---------------------------------------------------------------------------
-def test_removing_the_leak_makes_the_arms_identical(no_leak_result):
+def test_removing_the_leak_makes_the_arms_identical(no_leak_result: ComparisonResult) -> None:
     """Without the injected leak the two arms must produce identical metrics.
 
     This is the control that gives invariants 1-2 their meaning. If the arms
@@ -178,7 +179,7 @@ def test_removing_the_leak_makes_the_arms_identical(no_leak_result):
 # ---------------------------------------------------------------------------
 # Invariant 1: leakage inflates Sharpe
 # ---------------------------------------------------------------------------
-def test_leaky_sharpe_exceeds_corrected(leaky_metrics, corrected_metrics):
+def test_leaky_sharpe_exceeds_corrected(leaky_metrics: Metrics, corrected_metrics: Metrics) -> None:
     """The leaky pipeline must report a *higher* Sharpe than the corrected one.
 
     The control arm is handed the amended EPS as of the fiscal period end
@@ -198,7 +199,7 @@ def test_leaky_sharpe_exceeds_corrected(leaky_metrics, corrected_metrics):
 # ---------------------------------------------------------------------------
 # Invariant 2: leakage inflates cumulative return
 # ---------------------------------------------------------------------------
-def test_leaky_cumret_exceeds_corrected(leaky_metrics, corrected_metrics):
+def test_leaky_cumret_exceeds_corrected(leaky_metrics: Metrics, corrected_metrics: Metrics) -> None:
     """The leaky pipeline must report a *higher* cumulative return."""
     leaky_r = leaky_metrics.cumulative_return
     corrected_r = corrected_metrics.cumulative_return
@@ -212,7 +213,9 @@ def test_leaky_cumret_exceeds_corrected(leaky_metrics, corrected_metrics):
 # ---------------------------------------------------------------------------
 # Invariant 3: leakage does not hide drawdown
 # ---------------------------------------------------------------------------
-def test_leaky_drawdown_not_worse_than_corrected(leaky_metrics, corrected_metrics):
+def test_leaky_drawdown_not_worse_than_corrected(
+    leaky_metrics: Metrics, corrected_metrics: Metrics
+) -> None:
     """The control arm must not report a *deeper* drawdown than the honest arm.
 
     Drawdown is negative; smaller (more negative) means worse. Leakage hides
@@ -239,7 +242,7 @@ def test_leaky_drawdown_not_worse_than_corrected(leaky_metrics, corrected_metric
 # ---------------------------------------------------------------------------
 # Invariant 4: the inflation stays plausible
 # ---------------------------------------------------------------------------
-def test_leaky_sharpe_stays_plausible(leaky_metrics):
+def test_leaky_sharpe_stays_plausible(leaky_metrics: Metrics) -> None:
     """Leakage inflates performance; it should not produce fantasy numbers."""
     leaky_s = leaky_metrics.sharpe_ratio
     assert leaky_s is not None, "Leaky Sharpe must be computable"
@@ -253,7 +256,7 @@ def test_leaky_sharpe_stays_plausible(leaky_metrics):
 # ---------------------------------------------------------------------------
 # Invariant 5: corrected pipeline is economically meaningful
 # ---------------------------------------------------------------------------
-def test_corrected_sharpe_is_positive(corrected_metrics):
+def test_corrected_sharpe_is_positive(corrected_metrics: Metrics) -> None:
     """The corrected pipeline must have a positive Sharpe over the 4-year window.
 
     This validates that the GBM path (with fixed seed) leaves the honest arm

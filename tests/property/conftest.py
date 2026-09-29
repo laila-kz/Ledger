@@ -4,12 +4,15 @@ from datetime import datetime, timedelta, timezone
 
 import polars as pl
 from hypothesis import strategies as st
+from hypothesis.strategies import DrawFn
 
 BASE_DATETIME = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
+IngestionEvent = dict[str, object]
+
 
 @st.composite
-def ingestion_event(draw):
+def ingestion_event(draw: DrawFn) -> IngestionEvent:
     """Generate a single raw bitemporal ingestion event record."""
     sec_id = draw(st.sampled_from(["SEC_AAPL_001", "SEC_TSLA_001", "SEC_NVDA_001"]))
     metric_name = draw(st.sampled_from(["close", "eps", "revenue"]))
@@ -35,9 +38,11 @@ def ingestion_event(draw):
 
 
 @st.composite
-def event_sequence(draw, min_size: int = 1, max_size: int = 15):
+def event_sequence(draw: DrawFn, min_size: int = 1, max_size: int = 15) -> list[IngestionEvent]:
     """Generate a sequence of ingestion events with assigned ingestion sequence numbers."""
-    events = draw(st.lists(ingestion_event(), min_size=min_size, max_size=max_size))
+    events: list[IngestionEvent] = draw(
+        st.lists(ingestion_event(), min_size=min_size, max_size=max_size)
+    )
     # Assign monotonic ingestion_seq
     for seq, event in enumerate(events):
         event["ingestion_seq"] = seq
@@ -45,10 +50,12 @@ def event_sequence(draw, min_size: int = 1, max_size: int = 15):
 
 
 @st.composite
-def bitemporal_polars_dataframe(draw, min_size: int = 1, max_size: int = 15):
+def bitemporal_polars_dataframe(
+    draw: DrawFn, min_size: int = 1, max_size: int = 15
+) -> pl.DataFrame:
     """Generate a Polars DataFrame populated with raw append-only ingestion events."""
     events = draw(event_sequence(min_size=min_size, max_size=max_size))
-    schema = {
+    schema: dict[str, pl.DataType | type[pl.DataType]] = {
         "sec_id": pl.String,
         "metric_name": pl.String,
         "valid_from": pl.Datetime("us", "UTC"),

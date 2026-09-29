@@ -24,7 +24,9 @@ def test_tear_sheet_reports_corrected_minus_leaky_delta() -> None:
 
     sheet = build_tear_sheet(leaky, corrected, periods_per_year=252)
 
-    assert sheet.delta.cumulative_return < 0.0
+    delta_return = sheet.delta.cumulative_return
+    assert delta_return is not None, "delta cumulative return must be computable"
+    assert delta_return < 0.0
     assert "Corrected" in sheet.render()
     assert "corrected - leaky" in sheet.render()
     assert "n/a" in sheet.render()

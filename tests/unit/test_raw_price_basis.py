@@ -362,6 +362,9 @@ class TestKnownFromStamping:
         records = parse_splits_series(series, sec_id="SEC_AAPL_001", ingestion_seq=1)
 
         known_from = records[0]["known_from"]
+        assert isinstance(known_from, datetime), (
+            f"known_from must be a datetime, got {type(known_from).__name__}"
+        )
         assert known_from.date() == date(2020, 8, 31)
         # The bar for that same session is actionable no earlier than the split,
         # so a simulator pairing them cannot see the split early.
