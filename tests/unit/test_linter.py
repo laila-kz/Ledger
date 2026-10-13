@@ -80,3 +80,36 @@ def test_lint_command_rejects_syntax_errors(
 
     assert main([str(script)]) == 1
     assert "syntax error" in capsys.readouterr().out
+
+
+def test_lint_command_rejects_directory_with_clear_message(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Passing a directory should return exit 1 with a helpful message, not PermissionError."""
+    exit_code = main([str(tmp_path)])
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert "is a directory" in output
+    assert "expected a single Python file" in output
+
+
+def test_lint_command_rejects_empty_directory(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An empty directory should produce the same clean rejection as a non-empty one."""
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    exit_code = main([str(empty_dir)])
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert "is a directory" in output
+
+
+def test_lint_command_rejects_nonexistent_path(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A path that does not exist should return exit 1 with a not-found message."""
+    exit_code = main(["does_not_exist_xyz.py"])
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert "not found" in output

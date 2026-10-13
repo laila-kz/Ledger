@@ -35,6 +35,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Error: script file not found: {path}")
         return 1
 
+    if path.is_dir():
+        print(
+            f"Error: {path} is a directory — expected a single Python file.\n"
+            "To lint a specific script, pass its path directly:\n"
+            "  ledger lint examples/sample_strategy.py"
+        )
+        return 1
+
     try:
         findings = lint_file(path)
     except SyntaxError as error:

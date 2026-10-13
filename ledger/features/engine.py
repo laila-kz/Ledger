@@ -19,6 +19,7 @@ Mathematical & Architectural Invariants:
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
@@ -306,15 +307,25 @@ def join_single_feature_as_of(
     )
     right_sorted = feat_clean.sort(r_time)
 
-    # Execute backward ASOF join
-    joined = left_sorted.join_asof(
-        right_sorted,
-        left_on=as_of_column,
-        right_on=r_time,
-        by_left=sec_id_column,
-        by_right=r_sec_id,
-        strategy="backward",
-    )
+    # Execute backward ASOF join.
+    # Polars 0.20 cannot validate column sortedness when `by` groups are
+    # provided and unconditionally emits a UserWarning at the join site.  The
+    # sort applied above (left by as_of_column, right by r_time) is correct;
+    # the warning is a Polars engine limitation, not a logic error.  Suppress
+    # it narrowly so the rest of the call stack stays visible.
+    with warnings.catch_warnings():
+        warnings.simplefilter(
+            "ignore",
+            UserWarning,
+        )
+        joined = left_sorted.join_asof(
+            right_sorted,
+            left_on=as_of_column,
+            right_on=r_time,
+            by_left=sec_id_column,
+            by_right=r_sec_id,
+            strategy="backward",
+        )
 
     # Enforce upper bound constraint (known_to / valid_to)
     # If observation_timestamp >= bound, mask joined feature values to null

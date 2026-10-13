@@ -2,6 +2,12 @@
 
 This guide provides a comprehensive, step-by-step walkthrough for running the entire **Ledger** project from start to finish. Use this document to verify system integrity, test all features, and follow a structured minute-by-minute script for recording a professional demo video.
 
+> [!NOTE]
+> **Demo video availability:** Demo video files (`*.mp4`) are excluded from the
+> repository via `.gitignore` and are not publicly hosted at this time. To
+> reproduce the walkthrough locally, follow this runbook in order. To request
+> a copy of the recorded demo, contact the repository author directly.
+
 > [!IMPORTANT]
 > **Formal Verification Highlights (TLA+ & Hypothesis):**
 > Ledger features formal mathematical specification of the bitemporal state machine in TLA+ ([`docs/formal/Ledger.tla`](docs/formal/Ledger.tla)), model-checked across 22,158 states with zero invariant violations ([`docs/formal/tlc_run_log.txt`](docs/formal/tlc_run_log.txt)), and fuzzed via Hypothesis property tests ([`tests/property/`](tests/property/)).
