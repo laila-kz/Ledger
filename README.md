@@ -211,3 +211,13 @@ To re-run model checking locally using TLC:
 ```bash
 java -cp tla2tools.jar tlc2.TLC -config docs/formal/Ledger.cfg docs/formal/Ledger.tla
 ```
+
+## Demo Video
+
+A recorded walkthrough of the end-to-end pipeline is not yet publicly hosted.
+Demo video files (`*.mp4`) are excluded from the repository via `.gitignore`
+and must be requested separately.
+
+For a structured, step-by-step guide to reproducing the same walkthrough
+locally — including quality gates, data ingestion, canary runs, backtest
+comparison, and manifest verification — see [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md).

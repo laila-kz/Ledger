@@ -30,7 +30,12 @@ Without recorded content hashes, quant teams cannot tell whether a historical ba
 The manifest separates immutable reproducibility inputs from mutable execution metadata:
 
 1. **`reproducible` (Content Hashed for `run_id`):**
-   - **Environment:** Python version, OS platform, and `uv.lock`/`poetry.lock` SHA-256 digest.
+   - **Environment:** Python version, OS platform, and dependency lockfile SHA-256
+     digest. The implementation resolves the first lockfile found from an
+     ordered candidate list: `uv.lock` → `poetry.lock` → `requirements.txt`.
+     This repository currently tracks `requirements.txt`; the manifest hashes
+     that file when the other candidates are absent. The `lockfile` section is
+     omitted from `reproducible` when no candidate file exists.
    - **Code State:** Exact Git commit SHA and dirty working tree flag.
    - **Input Partitions:** Exact file paths, row counts, byte lengths, and SHA-256 digests of all raw Parquet partitions consumed.
    - **Feature DAG Definitions:** Function names, versions, dependencies, and deterministic SHA-256 source code hashes.

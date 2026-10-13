@@ -1,6 +1,6 @@
 # Week 5 Guide: Presentation, Production Documentation, CI/CD & Developer Tooling
 
-**Primary Objective:** Deliver a portfolio presentation and developer tooling suite that immediately signals senior-level infrastructure and quant systems maturity to recruiters and hiring managers. Set up automated GitHub Actions CI with console script CLI entrypoints (`ledger`), write concise technical documentation and 4 Architecture Decision Records (ADRs), implement a Static AST Leakage Linter (`ledger lint`), polish hash manifest verification (`ledger verify-manifest`), and assemble the final interview defense.
+**Primary Objective:** Deliver a portfolio presentation and developer tooling suite that immediately signals senior-level infrastructure and quant systems maturity to recruiters and hiring managers. Set up automated GitHub Actions CI with console script CLI entrypoints (`ledger`), write concise technical documentation and the 4 core Architecture Decision Records (ADRs) scoped to Week 05 (since expanded to 19 total across all project weeks — see `docs/adr/`), implement a Static AST Leakage Linter (`ledger lint`), polish hash manifest verification (`ledger verify-manifest`), and assemble the final interview defense.
 
 ---
 
@@ -12,7 +12,7 @@
 - [ ] Hash Manifest Verifier (`ledger/lineage/manifest.py` & `ledger verify-manifest`) recording SHA-256 digests of every input so drift is detectable.
 - [ ] Static AST "Leakage Linter" (`ledger/tools/linter.py` & `ledger lint`) detecting lookahead antipatterns in user alpha scripts.
 - [ ] Comprehensive unit tests for AST Linter and Manifest Verifier covering all 4 detection rules with positive (leaky) and negative (compliant) test fixtures.
-- [ ] 4 Architecture Decision Records (ADRs) written in `docs/adr/` capturing all foundational systems decisions.
+- [ ] 4 core Architecture Decision Records (ADRs) written in `docs/adr/` capturing the foundational Week 05 systems decisions (bitemporality, ASOF engine, hash manifest, AST vs. canary). The repository subsequently expanded to 19 ADRs across all project weeks.
 - [ ] Repository clean: zero lint warnings, 100% type annotations, clean `.gitignore`, clear commit history.
 
 ---
@@ -66,7 +66,7 @@
 3. **Write Unit Tests (`tests/unit/test_linter.py`):**
    - Test detection across all 4 rules with paired positive (leaky) and negative (compliant) test fixtures.
 
-### Day 5: 4 Architecture Decision Records (ADRs), Repo Polish & Interview Rehearsal
+### Day 5: 4 Core Architecture Decision Records (ADRs), Repo Polish & Interview Rehearsal
 1. **Write the 4 Core ADRs in `docs/adr/` (written post-implementation for maximum technical precision).** These were originally filed as `0001`–`0004` and have since been renumbered to continue the main series; the current filenames are:
    - **`017-bitemporal-interval-model.md`:** Explains Valid Time vs. Transaction Time, append-only raw storage, and why `known_to` is derived via `LEAD()` rather than stored.
    - **`018-duckdb-polars-asof-engine.md`:** Compares Feast vs. custom DuckDB/Polars ASOF engine for historical backtesting.

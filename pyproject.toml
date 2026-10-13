@@ -89,6 +89,7 @@ module = [
     "scipy.*",
     "reportlab.*",
     "matplotlib.*",
+    "hypothesis.*",
 ]
 ignore_missing_imports = true
 

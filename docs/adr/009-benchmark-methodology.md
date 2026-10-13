@@ -108,16 +108,19 @@ timing measurements. Standalone scripts measure net algorithm latency.
 
 ## Consequences
 
-- **CI budget**: The `< 100ms` SLA test (`test_benchmark_1000_observations_sub_100ms`)
-  runs on every CI push. If it fails on CI (which runs slower hardware), the
-  threshold must be revisited via a new ADR rather than silently raised.
+- **CI budget**: The `< 250ms` SLA test (`test_benchmark_30k_observations`)
+  runs on every CI push via `pytest -m benchmark`. It exercises 30,000
+  observation queries across 20 tickers (1,500 obs/ticker, 2,000 daily
+  bars/ticker) and must complete within 250 ms wall time. If it fails on CI
+  (which runs slower hardware), the threshold must be revisited via a new ADR
+  rather than silently raised.
 - **Future baselines**: When Week 3 adds the fundamental feature views (P/E, EPS),
   the ASOF join benchmark must be re-run and results updated in
   `docs/CLAIMS.md` §7, which is where current benchmark numbers are recorded.
   (`WAR_LOG.md` was the original target for this; it is now archived under
   `docs/history/` and is not a statement of current state.)
 - **Arrow version pinning**: Zero-copy buffer sharing relies on Polars and
-  PyArrow using the same Arrow ABI. `pyproject.toml` pins `pyarrow>=17.0` to
+  PyArrow using the same Arrow ABI. `pyproject.toml` pins `pyarrow>=14.0.0` to
   ensure compatibility. If Polars drops direct PyArrow buffer sharing in a
   future release, this ADR must be revisited.
 
@@ -126,8 +129,8 @@ timing measurements. Standalone scripts measure net algorithm latency.
 ## Verification Commands
 
 ```bash
-# Run the CI benchmark test
-uv run pytest tests/unit/test_asof_engine.py::TestVectorizedEnginePerformance -v
+# Run the CI benchmark test (30k observations, 250ms budget)
+uv run pytest tests/unit/test_asof_engine.py::TestVectorizedEnginePerformance::test_benchmark_30k_observations -v
 
 # Run the zero-copy test suite
 uv run pytest tests/unit/test_arrow_zero_copy.py -v
